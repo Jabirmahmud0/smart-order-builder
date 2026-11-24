@@ -81,4 +81,18 @@ export const breakfastMenu: Menu = {
     cheese: 4,
     hollandaise: 5,
   },
+  promotions: {
+    extras: { id: 'P2', groupId: 'extras', unitsPerFree: 3 },
+    combo: { id: 'P1', minimums: { eggs: 4, protein: 2 }, percent: 10 },
+    threshold: { id: 'C1', minimumSubtotalPoisha: 120_000, amountPoisha: 10_000 },
+    coupon: {
+      id: 'C2',
+      code: 'MORNING15',
+      percent: 15,
+      capPoisha: 15_000,
+      timeZone: 'Asia/Dhaka',
+      cutoff: '11:00',
+    },
+    vatPercent: 5,
+  },
 }

@@ -8,7 +8,7 @@ const server = setupServer(...handlers)
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterAll(() => server.close())
 
-test('GET /api/menu returns menu options, rules, and shared stock', async () => {
+test('GET /api/menu returns menu options, rules, shared stock, and promotions', async () => {
   const response = await fetch('http://localhost/api/menu')
   expect(response.status).toBe(200)
 
@@ -29,4 +29,10 @@ test('GET /api/menu returns menu options, rules, and shared stock', async () => 
     max: 2,
   })
   expect(menu.stock.egg).toBe(10)
+  expect(menu.promotions.coupon).toMatchObject({
+    code: 'MORNING15',
+    capPoisha: 15_000,
+    timeZone: 'Asia/Dhaka',
+    cutoff: '11:00',
+  })
 })
