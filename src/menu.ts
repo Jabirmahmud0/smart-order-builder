@@ -1,6 +1,11 @@
 export type Configuration = Readonly<Record<string, number>>
 export type IngredientAmounts = Readonly<Record<string, number>>
 
+export type Selection = {
+  options: Configuration
+  qty: number
+}
+
 type MenuOption = {
   id: string
   name: string

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Configuration, Menu } from './menu'
 import { PricePreview } from './PricePreview'
-import { availableStock, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
+import { availableStock, formatShortages, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
 import { validate } from './validate'
 import './App.css'
 
@@ -74,7 +74,6 @@ function MenuBuilder({ menu }: { menu: Menu }) {
                   option.ingredients, menu.stock, usage, itemQuantity,
                 )
                 const shortages = additional === 0 ? stockShortages(option.ingredients, remaining) : []
-                const shortageText = shortages.map(({ ingredient, missing }) => `${missing} ${ingredient}`).join(', ')
 
                 return (
                   <div className="option" key={option.id} role="group" aria-label={option.name}>
@@ -83,7 +82,7 @@ function MenuBuilder({ menu }: { menu: Menu }) {
                       <small>
                         {additional === null ? 'Unlimited stock' : `${additional} more in stock`}
                       </small>
-                      {shortageText && <small>Short: {shortageText}</small>}
+                      {shortages.length > 0 && <small>{formatShortages(shortages)}</small>}
                     </div>
                     <div className="option-quantity">
                       <button

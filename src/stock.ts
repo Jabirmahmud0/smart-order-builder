@@ -70,6 +70,11 @@ export function stockShortages(
   return shortages
 }
 
+export function formatShortages(shortages: readonly Shortage[]): string {
+  const amounts = shortages.map(({ ingredient, missing }) => `${missing} ${ingredient}`)
+  return `Short: ${amounts.join(', ')}`
+}
+
 export function maxAdditionalUnits(
   ingredients: IngredientAmounts,
   available: IngredientAmounts,

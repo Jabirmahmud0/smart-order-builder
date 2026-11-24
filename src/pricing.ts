@@ -1,12 +1,7 @@
-import type { Configuration, Menu, Promotions } from './menu'
-
-type PricingLine = {
-  options: Configuration
-  qty: number
-}
+import type { Menu, Promotions, Selection } from './menu'
 
 export type PricingCart = {
-  lines: readonly PricingLine[]
+  lines: readonly Selection[]
   couponCode?: string | null
 }
 
@@ -19,7 +14,7 @@ function roundHalfUp(numerator: number, divisor: number): number {
   return Math.floor((numerator + divisor / 2) / divisor)
 }
 
-function priceLine(line: PricingLine, menu: Menu, promos: Promotions) {
+function priceLine(line: Selection, menu: Menu, promos: Promotions) {
   const selections = menu.groups.flatMap((group) =>
     group.options.flatMap((option) => {
       const qty = Object.hasOwn(line.options, option.id) ? line.options[option.id] : 0

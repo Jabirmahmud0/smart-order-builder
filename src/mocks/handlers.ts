@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw/http'
 import { delay } from 'msw/utils/delay'
 import { priceCart, type PricingCart } from '../pricing'
 import { breakfastMenu } from './menu'
+import { serverNow } from './serverTime'
 
 export const handlers = [
   http.get('*/api/menu', () => HttpResponse.json(breakfastMenu)),
@@ -11,7 +12,7 @@ export const handlers = [
 
     if (Math.random() < 0.15) return new HttpResponse(null, { status: 503 })
 
-    const serverTime = new Date(Date.now() + 90_000).toISOString()
+    const serverTime = new Date(serverNow()).toISOString()
     const pricing = priceCart(cart, breakfastMenu, breakfastMenu.promotions, serverTime)
     return HttpResponse.json({ pricing, serverTime })
   }),
