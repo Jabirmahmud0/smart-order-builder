@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Menu } from './menu'
+import type { Configuration, Menu } from './menu'
+import { availableStock, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
 import { validate } from './validate'
 import './App.css'
 
@@ -37,11 +38,25 @@ export default function App() {
 }
 
 function MenuBuilder({ menu }: { menu: Menu }) {
-  const [quantities, setQuantities] = useState<Record<string, string>>({})
-  const config = Object.fromEntries(
-    Object.entries(quantities).map(([id, value]) => [id, Number(value)]),
-  )
+  const [config, setConfig] = useState<Configuration>({})
+  const itemQuantity = 1
+  const usage = ingredientUsage(config, menu.groups, itemQuantity)
+  const remaining = availableStock(menu.stock, [{ id: 'draft', ingredients: usage }])
   const violations = validate(config, menu.groups, menu.rules)
+
+  function changeQuantity(optionId: string, change: -1 | 1) {
+    setConfig((current) => {
+      const quantity = Object.hasOwn(current, optionId) ? current[optionId] : 0
+      const next = { ...current, [optionId]: Math.max(0, quantity + change) }
+
+      if (change > 0) {
+        const nextUsage = ingredientUsage(next, menu.groups, itemQuantity)
+        if (stockShortages(nextUsage, menu.stock).length > 0) return current
+      }
+
+      return next
+    })
+  }
 
   return (
     <>
@@ -52,21 +67,45 @@ function MenuBuilder({ menu }: { menu: Menu }) {
             <fieldset key={group.id}>
               <legend>{group.name}</legend>
 
-              {group.options.map((option) => (
-                <label className="option" key={option.id}>
-                  {option.name}
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={Object.hasOwn(quantities, option.id) ? quantities[option.id] : '0'}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value
-                      setQuantities((current) => ({ ...current, [option.id]: value }))
-                    }}
-                  />
-                </label>
-              ))}
+              {group.options.map((option) => {
+                const quantity = Object.hasOwn(config, option.id) ? config[option.id] : 0
+                const additional = maxAdditionalUnits(
+                  option.ingredients, menu.stock, usage, itemQuantity,
+                )
+                const shortages = additional === 0 ? stockShortages(option.ingredients, remaining) : []
+                const shortageText = shortages.map(({ ingredient, missing }) => `${missing} ${ingredient}`).join(', ')
+
+                return (
+                  <div className="option" key={option.id} role="group" aria-label={option.name}>
+                    <div>
+                      {option.name}
+                      <small>
+                        {additional === null ? 'Unlimited stock' : `${additional} more in stock`}
+                      </small>
+                      {shortageText && <small>Short: {shortageText}</small>}
+                    </div>
+                    <div className="option-quantity">
+                      <button
+                        type="button"
+                        aria-label={`Remove ${option.name}`}
+                        disabled={quantity === 0}
+                        onClick={() => changeQuantity(option.id, -1)}
+                      >
+                        −
+                      </button>
+                      <span>{quantity}</span>
+                      <button
+                        type="button"
+                        aria-label={`Add ${option.name}`}
+                        disabled={additional === 0}
+                        onClick={() => changeQuantity(option.id, 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </fieldset>
           ))}
         </div>
