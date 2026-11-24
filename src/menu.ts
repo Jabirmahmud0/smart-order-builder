@@ -1,8 +1,11 @@
+export type Configuration = Readonly<Record<string, number>>
+export type IngredientAmounts = Readonly<Record<string, number>>
+
 type MenuOption = {
   id: string
   name: string
   pricePoisha: number
-  ingredients: Record<string, number>
+  ingredients: IngredientAmounts
 }
 
 export type MenuGroup = {
@@ -27,5 +30,5 @@ export type Menu = {
   basePricePoisha: number
   groups: MenuGroup[]
   rules: MenuRule[]
-  stock: Record<string, number>
+  stock: IngredientAmounts
 }

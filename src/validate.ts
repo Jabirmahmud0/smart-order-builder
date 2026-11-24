@@ -1,6 +1,4 @@
-import type { MenuGroup, MenuRule } from './menu'
-
-export type Configuration = Readonly<Record<string, number>>
+import type { Configuration, MenuGroup, MenuRule } from './menu'
 
 type Violation =
   | { groupId: string; message: string }
