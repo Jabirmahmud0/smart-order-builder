@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Configuration, Menu } from './menu'
+import { PricePreview } from './PricePreview'
 import { availableStock, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
 import { validate } from './validate'
 import './App.css'
@@ -110,18 +111,21 @@ function MenuBuilder({ menu }: { menu: Menu }) {
           ))}
         </div>
 
-        <section className="selection" aria-labelledby="selection-heading">
-          <h3 id="selection-heading">Selection checks</h3>
-          <div aria-live="polite">
-            {violations.length === 0 ? (
-              <p>Selection meets the menu rules.</p>
-            ) : (
-              <ul>
-                {violations.map(({ message }, index) => <li key={`${message}-${index}`}>{message}</li>)}
-              </ul>
-            )}
-          </div>
-        </section>
+        <div className="builder-summary">
+          <section className="summary-panel" aria-labelledby="selection-heading">
+            <h3 id="selection-heading">Selection checks</h3>
+            <div aria-live="polite">
+              {violations.length === 0 ? (
+                <p>Selection meets the menu rules.</p>
+              ) : (
+                <ul>
+                  {violations.map(({ message }, index) => <li key={`${message}-${index}`}>{message}</li>)}
+                </ul>
+              )}
+            </div>
+          </section>
+          <PricePreview options={config} qty={itemQuantity} promotions={menu.promotions} />
+        </div>
       </div>
     </>
   )

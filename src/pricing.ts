@@ -5,7 +5,7 @@ type PricingLine = {
   qty: number
 }
 
-type PricingCart = {
+export type PricingCart = {
   lines: readonly PricingLine[]
   couponCode?: string | null
 }
@@ -110,3 +110,5 @@ export function priceCart(cart: PricingCart, menu: Menu, promos: Promotions, ser
 
   return { lines, subtotalPoisha, cartDiscount, discountedSubtotalPoisha, vatPoisha, payablePoisha }
 }
+
+export type CartPrice = ReturnType<typeof priceCart>
