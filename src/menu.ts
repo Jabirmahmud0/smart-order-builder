@@ -5,7 +5,7 @@ type MenuOption = {
   ingredients: Record<string, number>
 }
 
-type MenuGroup = {
+export type MenuGroup = {
   id: string
   name: string
   limits: {
@@ -18,7 +18,7 @@ type MenuGroup = {
   options: MenuOption[]
 }
 
-type MenuRule =
+export type MenuRule =
   | { id: string; type: 'requires' | 'excludes'; optionId: string; optionIds: string[] }
   | { id: string; type: 'overrideLimit'; optionId: string; groupId: string; max: number }
 
