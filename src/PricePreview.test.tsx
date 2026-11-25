@@ -4,12 +4,17 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Configuration } from './menu'
 import { breakfastMenu } from './mocks/menu'
-import { PricePreview } from './PricePreview'
+import { PricePreview as QuotePreview } from './PricePreview'
 import { priceCart } from './pricing'
+import { usePricePreview } from './usePricePreview'
 
 const { promotions } = breakfastMenu
 const firstOptions = { toast: 1, scrambled: 2, sausage: 1 }
 const latestOptions = { paratha: 1, fried: 2, tofu: 1, cheese: 2, beans: 1, mushroom: 1, chili: 1 }
+
+function PricePreview({ options, qty }: { options: Configuration; qty: number }) {
+  return <QuotePreview quote={usePricePreview(options, qty)} promotions={promotions} />
+}
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -42,15 +47,15 @@ test('TC-12 debounces changes and ignores a response that arrives after a newer 
     .mockReturnValueOnce(latest.promise)
   vi.stubGlobal('fetch', fetchPrice)
 
-  const { rerender } = render(<PricePreview options={{}} qty={1} promotions={promotions} />)
+  const { rerender } = render(<PricePreview options={{}} qty={1} />)
   await advance(299)
-  rerender(<PricePreview options={firstOptions} qty={1} promotions={promotions} />)
+  rerender(<PricePreview options={firstOptions} qty={1} />)
   await advance(299)
   expect(fetchPrice).not.toHaveBeenCalled()
   await advance(1)
   expect(fetchPrice).toHaveBeenCalledTimes(1)
 
-  rerender(<PricePreview options={latestOptions} qty={1} promotions={promotions} />)
+  rerender(<PricePreview options={latestOptions} qty={1} />)
   expect(fetchPrice.mock.calls[0][1]?.signal?.aborted).toBe(true)
   await advance(300)
   expect(fetchPrice).toHaveBeenCalledTimes(2)
@@ -64,7 +69,7 @@ test('TC-12 debounces changes and ignores a response that arrives after a newer 
   await act(async () => { first.complete(priceResponse(firstOptions)) })
   expect(screen.getByText('Payable').nextElementSibling?.textContent).toBe('515.00 BDT')
 
-  rerender(<PricePreview options={firstOptions} qty={1} promotions={promotions} />)
+  rerender(<PricePreview options={firstOptions} qty={1} />)
   expect(screen.queryByText('Payable')).toBeNull()
 })
 
@@ -74,11 +79,11 @@ test('Retry requests the same configuration after a temporary failure', async ()
     .mockResolvedValueOnce(priceResponse(firstOptions))
   vi.stubGlobal('fetch', fetchPrice)
 
-  render(<PricePreview options={firstOptions} qty={1} promotions={promotions} />)
+  render(<PricePreview options={firstOptions} qty={1} />)
   await advance(300)
   expect(screen.getByRole('alert').textContent).toBe('Could not load the price.')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry price' }))
   await advance(300)
 
   expect(fetchPrice).toHaveBeenCalledTimes(2)

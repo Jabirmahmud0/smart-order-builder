@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw/http'
-import type { Configuration, Menu, Selection } from '../menu'
+import type { Menu } from '../menu'
 import { editItem, readCart, removeItem, reserveItem, type CartState } from './reservations'
+import { parseSelection } from './selectionRequest'
 import { serverNow } from './serverTime'
 import { shopMenu } from './shopState'
 import { runShopTransaction } from './shopStore'
@@ -20,19 +21,6 @@ async function handleCart(mode: 'readonly' | 'readwrite', operation: CartOperati
       message: 'Could not update or load the cart. Please retry.',
     }, { status: 503 })
   }
-}
-
-async function readSelection(request: Request): Promise<Selection | null> {
-  const body: unknown = await request.json().catch(() => null)
-  if (!body || typeof body !== 'object' || !('options' in body) || !('qty' in body)) return null
-
-  const { options, qty } = body
-  if (!options || typeof options !== 'object' || Array.isArray(options) || typeof qty !== 'number') {
-    return null
-  }
-  if (!Object.values(options).every((value) => typeof value === 'number')) return null
-
-  return { options: options as Configuration, qty }
 }
 
 function invalidRequest(message: string) {
@@ -66,7 +54,7 @@ export const cartHandlers = [
     const idempotencyKey = request.headers.get('Idempotency-Key')
     if (!idempotencyKey?.trim()) return invalidRequest('An idempotency key is required.')
 
-    const selection = await readSelection(request)
+    const selection = parseSelection(await request.json().catch(() => null))
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
     return handleCart('readwrite', (cart, menu, now) => {
@@ -78,7 +66,7 @@ export const cartHandlers = [
   }),
 
   http.patch<{ id: string }>('*/api/cart/items/:id', async ({ request, params }) => {
-    const selection = await readSelection(request)
+    const selection = parseSelection(await request.json().catch(() => null))
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
     return handleCart('readwrite', (cart, menu, now) => {

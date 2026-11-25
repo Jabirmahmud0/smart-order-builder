@@ -116,7 +116,7 @@ export function CheckoutPanel({
       {receipt && !pricing && <PriceBreakdown pricing={receipt.pricing} promotions={menu.promotions} />}
       <div className="cart-actions checkout-actions">
         {(pricing || error?.retryable) && (
-          <button type="button" disabled={busy} onClick={pay}>
+          <button className="button-primary wide" type="button" disabled={busy} onClick={pay}>
             {error?.retryable ? 'Retry payment' : 'Pay'}
           </button>
         )}

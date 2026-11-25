@@ -2,9 +2,11 @@
 
 ## C1 · Pricing and rounding
 
-JavaScript can represent 679.50 exactly because the fractional part is one half. The rate 0.05 has a repeating binary expansion, so JavaScript stores an approximation. TC-06 lands right on a half-poisha boundary, where a tiny error can change the result that rounds up. The pricing engine uses integer poisha for money and applies rates as integer ratios.
+JavaScript represents 679.50 exactly because one half has a finite binary representation. The risk shows up at the VAT step. Five percent of 1,509.50 BDT is exactly 75.475 BDT, halfway between two poisha values. In JavaScript, `(1509.50 / 20).toFixed(2)` returns `"75.47"` because the division rounds to a binary value just below that midpoint.
 
-The cart subtotal is 165,950 poisha and the coupon takes off 15,000 poisha, leaving 150,950 poisha. Multiplying by 5 and dividing by 100 gives 7,547.5 poisha in VAT. Half-up rounding gives 7,548 poisha, or 75.48 BDT.
+For TC-06, the subtotal is `67,950 + 2 × 49,000 = 165,950` poisha. The 15% coupon reaches its 15,000 poisha cap, leaving `165,950 − 15,000 = 150,950` poisha. VAT is `150,950 × 5 ÷ 100 = 7,547.5` poisha. The engine applies half-up rounding with integer poisha and the rate ratio, which gives **7,548 poisha (75.48 BDT)**.
+
+The original C1 explanation and the first pricing implementation are recorded together in commit `ee612c9`.
 
 ## C2 · Sales assistant tools
 

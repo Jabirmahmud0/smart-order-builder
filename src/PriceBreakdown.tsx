@@ -1,14 +1,6 @@
 import type { Promotions } from './menu'
+import { formatPrice } from './money'
 import type { CartPrice } from './pricing'
-
-const amountFormat = new Intl.NumberFormat('en-BD', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
-function formatPrice(poisha: number) {
-  return `${amountFormat.format(poisha / 100)} BDT`
-}
 
 export function PriceBreakdown({ pricing, promotions }: { pricing: CartPrice; promotions: Promotions }) {
   const labels = new Map([

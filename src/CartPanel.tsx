@@ -47,13 +47,16 @@ export function CartPanel({
             return (
               <li key={item.id}>
                 <strong>{item.qty} × {menu.name}</strong>
-                <p>{details}</p>
-                <p>{expired ? 'Reservation expired' : `Reserved for ${countdown(item.expiresAt, serverTime)}`}</p>
+                <p className="cart-item-details">{details}</p>
+                <p className="reservation-badge" data-state={expired ? 'expired' : item.expiresAt - serverTime < 60_000 ? 'ending' : 'active'}>
+                  <span className="clock-icon" aria-hidden="true" />
+                  {expired ? 'Reservation expired' : `Reserved for ${countdown(item.expiresAt, serverTime)}`}
+                </p>
                 <div className="cart-actions">
                   <button type="button" disabled={busy || expired} onClick={() => onEdit(item)}>
                     Edit
                   </button>
-                  <button type="button" disabled={busy} onClick={() => onRemove(item.id)}>
+                  <button className="button-danger" type="button" disabled={busy} onClick={() => onRemove(item.id)}>
                     Remove
                   </button>
                 </div>

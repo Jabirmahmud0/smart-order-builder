@@ -39,11 +39,11 @@ test('GET /api/menu returns menu options, rules, shared stock, and promotions', 
   })
 })
 
-function requestPrice() {
+function requestPrice(body = JSON.stringify({ lines: [{ options: { toast: 1, scrambled: 2, sausage: 1 }, qty: 1 }] })) {
   return fetch('http://localhost/api/price', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lines: [{ options: { toast: 1, scrambled: 2, sausage: 1 }, qty: 1 }] }),
+    body,
   })
 }
 
@@ -67,4 +67,25 @@ test('POST /api/price can return a temporary failure', async () => {
   vi.spyOn(Math, 'random').mockReturnValue(0)
 
   expect((await requestPrice()).status).toBe(503)
+})
+
+test('POST /api/price rejects malformed JSON and invalid cart lines before simulating a failure', async () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  const bodies = [
+    '{',
+    JSON.stringify({ lines: [{}] }),
+    JSON.stringify({ lines: [{ options: { fried: 1.5 }, qty: 1 }] }),
+    JSON.stringify({ lines: [{ options: {}, qty: 0 }] }),
+    JSON.stringify({ lines: [], couponCode: 123 }),
+  ]
+  const responses = await Promise.all(bodies.map(requestPrice))
+  expect(responses.map(({ status }) => status)).toEqual([400, 400, 400, 400, 400])
+})
+
+test('POST /api/price quotes an incomplete selection', async () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0.2)
+  const response = await requestPrice(JSON.stringify({ lines: [{ options: { fried: 1 }, qty: 1 }] }))
+  expect(response.status).toBe(200)
+  const { pricing }: { pricing: CartPrice } = await response.json()
+  expect(pricing.subtotalPoisha).toBe(28_000)
 })

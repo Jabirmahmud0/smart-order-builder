@@ -4,7 +4,7 @@ Configure a breakfast, reserve its ingredients, and check out. The sales assista
 
 ## Setup
 
-Use Node.js 22.13 or later on the 22.x line, or Node.js 24 or later. The project was tested with Node.js 22.17.1.
+Use Node.js 22.13 or later on the 22.x line, or Node.js 24 or later. The project was tested with Node.js 22.23.5.
 
 ```sh
 npm ci
@@ -31,7 +31,7 @@ For the assistant, copy `.env.example` to `.env.local`, set `VITE_GEMINI_API_KEY
 
 - Mock data is shared by tabs on the same browser origin. It stays in that browser’s IndexedDB.
 - Expired reservations release their stock and remain visible for removal. Tabs refresh their snapshots on focus and periodically while the app is open.
-- Vite includes client environment variables in the application it serves. Build the public demo with the assessment key absent from the build environment.
+- Vite includes client environment variables in the application it serves. Build the public demo from a clean checkout without `.env.local` or `VITE_GEMINI_API_KEY` set.
 - Part G’s refresh cleanup, stale-tab version check, and draft persistence remain. The live demo is pending.
 
 See [DECISIONS.md](DECISIONS.md) for the decisions and checkpoints, and [ANSWERS.md](ANSWERS.md) for the computed results.

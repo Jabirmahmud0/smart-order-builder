@@ -1,7 +1,9 @@
+import breakfastImage from '../assets/breakfast.webp'
 import type { Menu } from '../menu'
 
 export const breakfastMenu: Menu = {
   name: 'Build Your Breakfast',
+  image: { src: breakfastImage, alt: 'Golden toast and scrambled eggs on a ceramic plate' },
   basePricePoisha: 25_000,
   groups: [
     {

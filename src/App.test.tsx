@@ -6,13 +6,29 @@ import { http, HttpResponse } from 'msw/http'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
+import { configB, configC } from './assessmentFixtures'
 import { handlers } from './mocks/handlers'
 import { breakfastMenu } from './mocks/menu'
 import type { OrdersExport } from './orders'
 
 const server = setupServer(...handlers)
 
-beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: 'error' })
+  if (!HTMLDialogElement.prototype.showModal) {
+    Object.defineProperties(HTMLDialogElement.prototype, {
+      show: { configurable: true, value(this: HTMLDialogElement) { this.open = true } },
+      showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true } },
+      close: {
+        configurable: true,
+        value(this: HTMLDialogElement) {
+          this.open = false
+          this.dispatchEvent(new Event('close'))
+        },
+      },
+    })
+  }
+})
 beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()))
 afterEach(() => {
   cleanup()
@@ -143,6 +159,41 @@ test('edits an item quantity with the original stock credited and removes the re
   expect(within(screen.getByRole('group', { name: 'Fried' })).getByText('10 more in stock')).toBeTruthy()
 })
 
+test('TC-11 shows both shortages beside the mobile Save button', async () => {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true, addEventListener: () => {}, removeEventListener: () => {},
+  }))
+
+  for (const [key, options, qty] of [['B', configB, 1], ['C', configC, 2]] as const) {
+    const response = await fetch('/api/cart/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify({ options, qty }),
+    })
+    expect(response.ok).toBe(true)
+  }
+
+  const { container } = render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'View cart (3)' }))
+  const orderSheet = screen.getByRole<HTMLDialogElement>('dialog', { name: 'Your order' })
+  const item = within(orderSheet).getByText('2 × Build Your Breakfast').closest('li')!
+  fireEvent.click(within(item).getByRole('button', { name: 'Edit' }))
+  expect(orderSheet.open).toBe(false)
+
+  const quantity = screen.getByRole('combobox', { name: 'Item quantity' })
+  const bar = within(container.querySelector('.mobile-order-bar')!)
+  const save = bar.getByRole<HTMLButtonElement>('button', { name: 'Save changes' })
+  fireEvent.change(quantity, { target: { value: '3' } })
+  const shortage = bar.getByRole('status')
+  expect(shortage.textContent).toBe('Short: 2 egg, 2 cheese')
+  expect(save.disabled).toBe(true)
+  expect(save.getAttribute('aria-describedby')).toBe(shortage.id)
+
+  fireEvent.change(quantity, { target: { value: '2' } })
+  expect(bar.queryByRole('status')).toBeNull()
+  expect(save.disabled).toBe(false)
+})
+
 test('uses the server countdown and keeps an expired edit draft visible with Save disabled', async () => {
   let elapsed = 0
   vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
@@ -263,6 +314,7 @@ test('TC-18 to TC-20 the sales assistant uses current orders and answers custome
 
   render(<App />)
   await screen.findByText('Your cart is empty.')
+  fireEvent.click(screen.getByRole('button', { name: 'Sales assistant' }))
   const sales = within(screen.getByRole('region', { name: 'Sales assistant' }))
   function ask(question: string) {
     fireEvent.change(sales.getByRole('textbox', { name: 'Sales question' }), { target: { value: question } })
@@ -273,6 +325,7 @@ test('TC-18 to TC-20 the sales assistant uses current orders and answers custome
   await sales.findByText('There are 6 orders.')
   ask('What is the best-selling option?')
   await sales.findByText('Fried is the best-selling option with 10 units.')
+  fireEvent.click(sales.getByRole('button', { name: 'Close sales assistant' }))
 
   selectBreakfast()
   const scrambled = screen.getByRole('button', { name: 'Add Scrambled' })
@@ -281,6 +334,8 @@ test('TC-18 to TC-20 the sales assistant uses current orders and answers custome
   fireEvent.click(await screen.findByRole('button', { name: 'Pay' }))
   await screen.findByText(/^Order ORD-.* paid\.$/)
 
+  fireEvent.click(screen.getByRole('button', { name: 'Sales assistant' }))
+  expect(sales.getByText('There are 6 orders.')).toBeTruthy()
   ask('How many orders?')
   await sales.findByText('There are 7 orders.')
   ask('What is the best-selling option?')

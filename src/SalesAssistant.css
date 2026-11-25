@@ -1,0 +1,281 @@
+.app-header {
+  --assistant-right: max(1.25rem, env(safe-area-inset-right));
+  --assistant-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+.assistant-launcher {
+  position: fixed;
+  right: var(--assistant-right);
+  bottom: var(--assistant-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 3rem;
+  padding-inline: 1rem;
+  border-radius: 2rem;
+  box-shadow: 0 5px 18px rgb(35 72 54 / 25%);
+}
+
+.chat-icon {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 1.05rem;
+  height: 0.86rem;
+  border: 1.5px solid currentColor;
+  border-radius: 0.28rem;
+}
+
+.chat-icon::after {
+  position: absolute;
+  bottom: -0.23rem;
+  left: 0.2rem;
+  width: 0.28rem;
+  height: 0.28rem;
+  transform: skewY(-32deg);
+  border-bottom: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  content: '';
+}
+
+.sales-dialog {
+  position: fixed;
+  inset: auto var(--assistant-right) calc(var(--assistant-bottom) + 3.75rem) auto;
+  width: min(27rem, 100% - 2.5rem);
+  height: min(33rem, 100dvh - var(--assistant-bottom) - 5rem);
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.15rem;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 16px 55px rgb(28 40 29 / 24%);
+}
+
+.sales-assistant {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+}
+
+.sales-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 1rem;
+  background: var(--forest);
+  color: white;
+}
+
+.sales-header h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.4rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.sales-header-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding-bottom: 0.15rem;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 13%);
+}
+
+.sales-header .close-button {
+  flex: none;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  margin-inline-start: auto;
+  border-color: rgb(255 255 255 / 35%);
+  color: white;
+  background: transparent;
+}
+
+.sales-header .close-button:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 60%);
+  background: rgb(255 255 255 / 13%);
+}
+
+.sales-header .close-button:focus-visible {
+  outline-color: white;
+}
+
+.sales-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--canvas);
+}
+
+.sales-body:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: -2px;
+}
+
+.sales-body p {
+  margin: 0;
+  font-size: 0.91rem;
+  line-height: 1.5;
+}
+
+.sales-body .assistant-setup {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.55rem;
+  color: var(--amber-ink);
+  background: var(--amber);
+  font-size: 0.82rem;
+}
+
+.sales-welcome {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 22rem);
+  margin: auto;
+}
+
+.sales-welcome p {
+  max-width: 27ch;
+  font-family: var(--display);
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.starter-questions {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.starter-questions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.75rem;
+  text-align: start;
+}
+
+.starter-questions span {
+  font-size: 1rem;
+}
+
+.sales-conversation {
+  display: grid;
+  gap: 1rem;
+}
+
+.chat-turn {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.chat-turn p {
+  width: fit-content;
+  max-width: 88%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem 0.85rem 0.85rem 0.2rem;
+  background: var(--surface);
+}
+
+.chat-turn .chat-question {
+  justify-self: end;
+  border-color: transparent;
+  border-radius: 0.85rem 0.85rem 0.2rem;
+  color: white;
+  background: var(--forest);
+}
+
+.chat-turn strong {
+  display: block;
+  font-size: 0.74rem;
+}
+
+.sales-status {
+  color: var(--muted);
+}
+
+.sales-body [role='alert'] {
+  color: var(--error);
+}
+
+.sales-form {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.sales-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.sales-form button {
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 759px) {
+  .assistant-launcher {
+    position: static;
+    flex: none;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    margin-inline-start: auto;
+    padding: 0 0 0.15rem;
+    border-color: var(--line);
+    border-radius: 0.65rem;
+    color: var(--forest);
+    background: var(--selected);
+    box-shadow: none;
+  }
+
+  .assistant-launcher:hover:not(:disabled) {
+    border-color: var(--forest);
+    color: white;
+  }
+
+  .assistant-launcher-label {
+    display: none;
+  }
+
+  .sales-dialog {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .sales-header {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  .sales-form {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}

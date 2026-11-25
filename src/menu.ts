@@ -47,6 +47,7 @@ export type Promotions = {
 
 export type Menu = {
   name: string
+  image?: { src: string; alt: string }
   basePricePoisha: number
   groups: MenuGroup[]
   rules: MenuRule[]
