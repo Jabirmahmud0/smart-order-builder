@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "answers": "vitest run --disableConsoleIntercept src/assessmentAnswers.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

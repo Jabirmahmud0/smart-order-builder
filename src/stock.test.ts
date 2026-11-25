@@ -1,14 +1,9 @@
 import { expect, test } from 'vitest'
+import { configB, configC } from './assessmentFixtures'
 import { breakfastMenu } from './mocks/menu'
 import { availableStock, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
 
 const { groups, stock } = breakfastMenu
-const configB = {
-  croissant: 1, omelette: 2, fried: 2, sausage: 1, bacon: 1,
-  hashbrown: 1, mushroom: 1, hollandaise: 1,
-}
-const configC = { paratha: 1, fried: 2, tofu: 1, cheese: 2, beans: 1, mushroom: 1, chili: 1 }
-
 const cart = [
   { id: 'b', ingredients: ingredientUsage(configB, groups, 1) },
   { id: 'c', ingredients: ingredientUsage(configC, groups, 2) },

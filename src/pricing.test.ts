@@ -1,17 +1,11 @@
 import { expect, test } from 'vitest'
+import { configA, configB, configC } from './assessmentFixtures'
 import { breakfastMenu } from './mocks/menu'
 import { priceCart } from './pricing'
 
 const { promotions } = breakfastMenu
 const beforeCutoff = '2026-11-25T04:59:59Z'
 const atCutoff = '2026-11-25T05:00:00Z'
-
-const configA = { toast: 1, scrambled: 2, sausage: 1, ketchup: 1 }
-const configB = {
-  croissant: 1, omelette: 2, fried: 2, sausage: 1, bacon: 1,
-  hashbrown: 1, mushroom: 1, hollandaise: 1,
-}
-const configC = { paratha: 1, fried: 2, tofu: 1, cheese: 2, beans: 1, mushroom: 1, chili: 1 }
 
 const cart = {
   lines: [{ options: configB, qty: 1 }, { options: configC, qty: 2 }],
