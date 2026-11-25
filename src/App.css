@@ -108,6 +108,28 @@ main {
   margin-block: 0.35rem;
 }
 
+.checkout-fields,
+.checkout-fields label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.checkout-fields {
+  gap: 0.75rem;
+}
+
+.checkout-fields input,
+.checkout-fields select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  font: inherit;
+}
+
+.checkout-actions {
+  margin-top: 0.75rem;
+}
+
 .price-breakdown {
   margin: 0;
 }

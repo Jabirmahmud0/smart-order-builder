@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CartSnapshot } from './mocks/reservations'
+import type { CheckoutPayment, Order } from './orders'
 
 type CartError = {
   message: string
   retryable: boolean
 }
 
-type MutationResult = { ok: true } | { ok: false; error: CartError }
+type MutationResult<Value> = { ok: true; value: Value } | { ok: false; error: CartError }
+type CheckoutResult = { order: Order; cart: CartSnapshot }
 
 export function useCart() {
   const [received, setReceived] = useState<{ cart: CartSnapshot; at: number } | null>(null)
@@ -54,7 +56,11 @@ export function useCart() {
     }
   }, [refresh])
 
-  async function mutate(path: string, request: RequestInit): Promise<MutationResult | null> {
+  async function requestMutation<Value>(
+    url: string,
+    request: RequestInit,
+    cartFrom: (value: Value) => CartSnapshot,
+  ): Promise<MutationResult<Value> | null> {
     if (writing.current) return null
     writing.current = true
     reading.current?.abort()
@@ -62,10 +68,11 @@ export function useCart() {
     setBusy(true)
 
     try {
-      const response = await fetch(`/api/cart${path}`, request)
+      const response = await fetch(url, request)
       if (response.ok) {
-        acceptCart(await response.json() as CartSnapshot)
-        return { ok: true }
+        const value: Value = await response.json()
+        acceptCart(cartFrom(value))
+        return { ok: true, value }
       }
 
       const error: { message?: string; cart?: CartSnapshot } = await response.json().catch(() => ({}))
@@ -82,9 +89,21 @@ export function useCart() {
     }
   }
 
+  function mutate(path: string, request: RequestInit) {
+    return requestMutation<CartSnapshot>(`/api/cart${path}`, request, (cart) => cart)
+  }
+
+  function pay(payment: CheckoutPayment, key: string) {
+    return requestMutation<CheckoutResult>('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify(payment),
+    }, (result) => result.cart)
+  }
+
   const serverTime = received
     ? Date.parse(received.cart.serverTime) + Math.max(0, tick - received.at)
     : 0
 
-  return { cart: received?.cart, serverTime, busy, loadError, refresh, mutate }
+  return { cart: received?.cart, serverTime, busy, loadError, refresh, mutate, pay }
 }

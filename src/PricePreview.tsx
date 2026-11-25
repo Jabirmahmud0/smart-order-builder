@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { Configuration, Promotions } from './menu'
+import { PriceBreakdown } from './PriceBreakdown'
 import type { CartPrice, PricingCart } from './pricing'
 
 type PreviewResult = {
   options: Configuration
   qty: number
   pricing: CartPrice | null
-}
-
-const amountFormat = new Intl.NumberFormat('en-BD', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
-function formatPrice(poisha: number) {
-  return `${amountFormat.format(poisha / 100)} BDT`
 }
 
 export function PricePreview({
@@ -76,38 +68,5 @@ export function PricePreview({
       )}
       {current?.pricing && <PriceBreakdown pricing={current.pricing} promotions={promotions} />}
     </section>
-  )
-}
-
-function PriceBreakdown({ pricing, promotions }: { pricing: CartPrice; promotions: Promotions }) {
-  const [line] = pricing.lines
-  const labels: Record<string, string> = {
-    [promotions.extras.id]: 'Extras deal',
-    [promotions.combo.id]: 'Combo discount',
-    [promotions.threshold.id]: 'Cart discount',
-    [promotions.coupon.id]: promotions.coupon.code,
-  }
-
-  return (
-    <dl className="price-breakdown">
-      {line.unitDiscounts.length > 0 && (
-        <div><dt>Before item discounts</dt><dd>{formatPrice(line.unitSubtotalPoisha * line.qty)}</dd></div>
-      )}
-      {line.unitDiscounts.map((discount) => (
-        <div key={discount.id}>
-          <dt>{labels[discount.id] ?? discount.id}</dt>
-          <dd>−{formatPrice(discount.amountPoisha * line.qty)}</dd>
-        </div>
-      ))}
-      <div><dt>Subtotal</dt><dd>{formatPrice(pricing.subtotalPoisha)}</dd></div>
-      {pricing.cartDiscount && (
-        <div>
-          <dt>{labels[pricing.cartDiscount.id] ?? pricing.cartDiscount.id}</dt>
-          <dd>−{formatPrice(pricing.cartDiscount.amountPoisha)}</dd>
-        </div>
-      )}
-      <div><dt>VAT</dt><dd>{formatPrice(pricing.vatPoisha)}</dd></div>
-      <div className="payable"><dt>Payable</dt><dd>{formatPrice(pricing.payablePoisha)}</dd></div>
-    </dl>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CartPanel } from './CartPanel'
+import { CheckoutPanel } from './CheckoutPanel'
 import type { IngredientAmounts, Menu, MenuGroup, Selection } from './menu'
 import type { CartSnapshot } from './mocks/reservations'
 import { PricePreview } from './PricePreview'
@@ -69,7 +70,7 @@ function MenuBuilder({ menu }: { menu: Menu }) {
   const [removeError, setRemoveError] = useState('')
   const addKey = useRef<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
-  const { cart, serverTime, busy, loadError, refresh, mutate } = useCart()
+  const { cart, serverTime, busy, loadError, refresh, mutate, pay } = useCart()
 
   const selection = edit?.selection ?? draft
   const { options: config, qty: itemQuantity } = selection
@@ -258,6 +259,7 @@ function MenuBuilder({ menu }: { menu: Menu }) {
             onEdit={startEdit}
             onRemove={remove}
           />
+          <CheckoutPanel cart={cart} menu={menu} serverTime={serverTime} busy={busy} onPay={pay} />
         </div>
       </div>
     </>

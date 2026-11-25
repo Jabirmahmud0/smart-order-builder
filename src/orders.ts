@@ -4,11 +4,14 @@ import { priceCart, type CartPrice } from './pricing'
 export const paymentMethods = ['card', 'bkash', 'cash'] as const
 export type PaymentMethod = typeof paymentMethods[number]
 
-type OrderInput = {
-  id: string
-  createdAt: string
+export type CheckoutPayment = {
   paymentMethod: PaymentMethod
   couponCode: string | null
+}
+
+type OrderInput = CheckoutPayment & {
+  id: string
+  createdAt: string
   lines: readonly Selection[]
 }
 

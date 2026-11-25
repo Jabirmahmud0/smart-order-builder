@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { IDBFactory } from 'fake-indexeddb'
 import { http, HttpResponse } from 'msw/http'
 import { setupServer } from 'msw/node'
@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vi
 import App from './App'
 import { handlers } from './mocks/handlers'
 import { breakfastMenu } from './mocks/menu'
+import type { OrdersExport } from './orders'
 
 const server = setupServer(...handlers)
 
@@ -163,4 +164,69 @@ test('uses the server countdown and keeps an expired edit draft visible with Sav
   expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Item quantity' }).value).toBe('2')
   expect(cart.getByRole<HTMLButtonElement>('button', { name: 'Edit' }).disabled).toBe(true)
   expect(cart.getByRole<HTMLButtonElement>('button', { name: 'Remove' }).disabled).toBe(false)
+})
+
+test('pays once using server-time totals and downloads the persisted order after remount', async () => {
+  let browserTime = Date.parse('2026-11-25T04:58:29Z')
+  let elapsed = 0
+  vi.spyOn(Date, 'now').mockImplementation(() => browserTime)
+  vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+  let paymentRequests = 0
+  server.use(http.post('*/api/checkout', () => { paymentRequests += 1 }))
+
+  const { unmount } = render(<App />)
+  await screen.findByText('Your cart is empty.')
+  selectBreakfast()
+  fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }))
+
+  const checkout = within(screen.getByRole('region', { name: 'Checkout' }))
+  fireEvent.change(await checkout.findByRole('textbox', { name: 'Coupon code' }), {
+    target: { value: 'MORNING15' },
+  })
+  expect(checkout.getByText('Payable').nextElementSibling?.textContent).toBe('339.00 BDT')
+
+  browserTime += 1_000
+  elapsed += 1_000
+  await checkout.findByText('Coupon did not apply.')
+  expect(checkout.getByText('Payable').nextElementSibling?.textContent).toBe('399.00 BDT')
+
+  fireEvent.change(checkout.getByRole('combobox', { name: 'Payment method' }), { target: { value: 'bkash' } })
+  const pay = checkout.getByRole('button', { name: 'Pay' })
+  fireEvent.click(pay)
+  fireEvent.click(pay)
+  const receipt = await checkout.findByText(/^Order ORD-.* paid\.$/)
+  const orderId = receipt.textContent?.split(' ')[1]
+  expect(paymentRequests).toBe(1)
+  expect(checkout.getByText('Payable').nextElementSibling?.textContent).toBe('399.00 BDT')
+  expect(screen.getByText('Your cart is empty.')).toBeTruthy()
+  expect(within(screen.getByRole('group', { name: 'Fried' })).getByText('8 more in stock')).toBeTruthy()
+  unmount()
+
+  const createObjectURL = vi.fn<(file: Blob) => string>().mockReturnValue('blob:http://localhost/orders')
+  const revokeObjectURL = vi.fn()
+  vi.stubGlobal('URL', class extends URL {
+    static createObjectURL = createObjectURL
+    static revokeObjectURL = revokeObjectURL
+  })
+  let downloadedName = ''
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    downloadedName = this.download
+  })
+
+  render(<App />)
+  await screen.findByText('Your cart is empty.')
+  fireEvent.click(screen.getByRole('button', { name: 'Download orders.json' }))
+  await waitFor(() => expect(downloadedName).toBe('orders.json'))
+  await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/orders'))
+  const file = createObjectURL.mock.calls[0][0]
+  const exported: OrdersExport = JSON.parse(await file.text())
+  expect(exported).toMatchObject({ schemaVersion: 1, currency: 'BDT', moneyUnit: 'poisha' })
+  expect(exported.orders).toHaveLength(7)
+  expect(exported.orders[6]).toMatchObject({
+    id: orderId,
+    paymentMethod: 'bkash',
+    couponCode: 'MORNING15',
+    appliedCouponCode: null,
+    pricing: { payablePoisha: 39_900 },
+  })
 })

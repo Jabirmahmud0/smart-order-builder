@@ -1,11 +1,9 @@
 import { http, HttpResponse } from 'msw/http'
-import { isPaymentMethod, priceOrder, type OrdersExport, type PaymentMethod } from '../orders'
+import { isPaymentMethod, priceOrder, type CheckoutPayment, type OrdersExport } from '../orders'
 import { readCart } from './reservations'
 import { serverNow } from './serverTime'
 import { shopMenu, type ShopState } from './shopState'
 import { runShopTransaction } from './shopStore'
-
-type Payment = { paymentMethod: PaymentMethod; couponCode: string | null }
 
 function unavailable() {
   return HttpResponse.json({ message: 'Could not access orders. Please retry.' }, { status: 503 })
@@ -15,7 +13,7 @@ function rejectPayment(message: string) {
   return HttpResponse.json({ message }, { status: 400 })
 }
 
-function checkout(shop: ShopState, payment: Payment, key: string, now: number) {
+function checkout(shop: ShopState, payment: CheckoutPayment, key: string, now: number) {
   if (Object.hasOwn(shop.successfulPayments, key)) {
     const order = shop.orders.find((candidate) => candidate.id === shop.successfulPayments[key])
     return {
