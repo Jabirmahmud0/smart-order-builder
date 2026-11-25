@@ -19,6 +19,7 @@ afterEach(() => {
   server.resetHandlers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 afterAll(() => server.close())
 
@@ -229,4 +230,57 @@ test('pays once using server-time totals and downloads the persisted order after
     appliedCouponCode: null,
     pricing: { payablePoisha: 39_900 },
   })
+})
+
+test('TC-18 to TC-20 the sales assistant uses current orders and answers customer questions locally', async () => {
+  vi.stubEnv('VITE_GEMINI_API_KEY', 'mock-gemini-key')
+  const requests: unknown[] = []
+  server.use(http.post(/generativelanguage\.googleapis\.com\/v1beta\/models\/.*:generateContent$/, async ({ request }) => {
+    const body = await request.json() as { contents: Array<{ parts: Array<{ text?: string; functionResponse?: unknown }> }> }
+    requests.push(body)
+    if (body.contents.some(({ parts }) => parts.some((part) => part.functionResponse))) {
+      expect(body.contents[1].parts[0]).toMatchObject({ thoughtSignature: 'sample-signature' })
+      expect(JSON.stringify(body)).not.toContain('ORD-1001')
+      expect(JSON.stringify(body)).not.toContain('payablePoisha')
+      return HttpResponse.json({ candidates: [{ content: {
+        role: 'model', parts: [{ text: 'There are 99 orders from an invented customer.' }],
+      } }] })
+    }
+    const prompt = body.contents[0].parts[0].text ?? ''
+    const name = prompt.includes('best-selling') ? 'getBestSellingOption' : 'getOrderCount'
+    return HttpResponse.json({ candidates: [{ content: {
+      role: 'model',
+      parts: [{ thoughtSignature: 'sample-signature', functionCall: { id: 'sales-call', name, args: {} } }],
+    } }] })
+  }))
+
+  render(<App />)
+  await screen.findByText('Your cart is empty.')
+  const sales = within(screen.getByRole('region', { name: 'Sales assistant' }))
+  function ask(question: string) {
+    fireEvent.change(sales.getByRole('textbox', { name: 'Sales question' }), { target: { value: question } })
+    fireEvent.click(sales.getByRole('button', { name: 'Ask' }))
+  }
+
+  ask('How many orders?')
+  await sales.findByText('There are 6 orders.')
+  ask('What is the best-selling option?')
+  await sales.findByText('Fried is the best-selling option with 10 units.')
+
+  selectBreakfast()
+  const scrambled = screen.getByRole('button', { name: 'Add Scrambled' })
+  for (let count = 0; count < 4; count += 1) fireEvent.click(scrambled)
+  fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Pay' }))
+  await screen.findByText(/^Order ORD-.* paid\.$/)
+
+  ask('How many orders?')
+  await sales.findByText('There are 7 orders.')
+  ask('What is the best-selling option?')
+  await sales.findByText('Scrambled is the best-selling option with 14 units.')
+  ask('Who is our best customer?')
+  await sales.findByText('Customer information is unavailable because the orders contain no customer records.')
+
+  expect(requests).toHaveLength(8)
+  expect(sales.queryByText(/invented customer/)).toBeNull()
 })

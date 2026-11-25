@@ -4,6 +4,7 @@ import { CheckoutPanel } from './CheckoutPanel'
 import type { IngredientAmounts, Menu, MenuGroup, Selection } from './menu'
 import type { CartSnapshot } from './mocks/reservations'
 import { PricePreview } from './PricePreview'
+import { SalesAssistant } from './SalesAssistant'
 import { availableStock, formatShortages, ingredientUsage, maxAdditionalUnits, stockShortages } from './stock'
 import { useCart } from './useCart'
 import { validate } from './validate'
@@ -37,7 +38,12 @@ export default function App() {
       <h1>Smart Order Builder</h1>
       {!menu && !menuError && <p role="status">Loading menu…</p>}
       {menuError && <p role="alert">Could not load the menu.</p>}
-      {menu && <MenuBuilder menu={menu} />}
+      {menu && (
+        <>
+          <MenuBuilder menu={menu} />
+          <SalesAssistant menu={menu} />
+        </>
+      )}
     </main>
   )
 }

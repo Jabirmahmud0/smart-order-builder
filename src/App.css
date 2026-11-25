@@ -130,6 +130,42 @@ main {
   margin-top: 0.75rem;
 }
 
+.summary-panel.sales-assistant {
+  margin-top: 1rem;
+}
+
+.sales-assistant h2 {
+  margin-top: 0;
+}
+
+.sales-conversation {
+  max-height: 18rem;
+  overflow: auto;
+  margin-bottom: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.sales-conversation p {
+  margin-block: 0.5rem;
+}
+
+.sales-input {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.sales-input input,
+.sales-input button {
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  font: inherit;
+}
+
+.sales-input input {
+  flex: 1;
+}
+
 .price-breakdown {
   margin: 0;
 }
