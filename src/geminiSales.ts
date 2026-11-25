@@ -1,3 +1,4 @@
+import type { GoogleGenAI, Interactions } from '@google/genai'
 import type { Menu } from './menu'
 import type { Order, OrdersExport } from './orders'
 import {
@@ -10,8 +11,7 @@ import {
   getTotalRevenue,
 } from './salesStats'
 
-const model = 'gemini-3.8-flash'
-const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+const model = 'gemini-3.5-flash-lite'
 const unsupported = 'I can answer questions about order counts, revenue, best-selling options, payment methods, average order value, coupons, and orders on a specific date.'
 export const missingGeminiKey = 'Set VITE_GEMINI_API_KEY in .env.local and restart the app to use Gemini.'
 const templates = [
@@ -19,24 +19,26 @@ const templates = [
   'Based on the stored orders, [[RESULT]]',
   'Here’s what the order records show. [[RESULT]]',
 ]
-const tools = [
-  { name: 'getOrderCount', description: 'Count all completed orders.' },
-  { name: 'getTotalRevenue', description: 'Total payable revenue across all completed orders.' },
-  { name: 'getBestSellingOption', description: 'Find the menu option sold in the highest number of units.' },
-  { name: 'getRevenueByPaymentMethod', description: 'Get revenue totals for card, bKash, and cash, including comparisons between methods.' },
-  { name: 'getAverageOrderValue', description: 'Calculate the average payable amount per order.' },
+const tools: Interactions.Function[] = [
+  { type: 'function', name: 'getOrderCount', description: 'Count all completed orders.' },
+  { type: 'function', name: 'getTotalRevenue', description: 'Total payable revenue across all completed orders.' },
+  { type: 'function', name: 'getBestSellingOption', description: 'Find the menu option sold in the highest number of units.' },
+  { type: 'function', name: 'getRevenueByPaymentMethod', description: 'Get revenue totals for card, bKash, and cash, including comparisons between methods.' },
+  { type: 'function', name: 'getAverageOrderValue', description: 'Calculate the average payable amount per order.' },
   {
+    type: 'function',
     name: 'getCouponUseCount',
     description: 'Count completed orders where a coupon actually applied.',
-    parametersJsonSchema: {
+    parameters: {
       type: 'object',
       properties: { couponCode: { type: 'string', description: 'Coupon code. Omit it to use the current menu coupon.' } },
     },
   },
   {
+    type: 'function',
     name: 'getOrdersOnDate',
     description: 'List orders or count orders on one calendar date in Dhaka.',
-    parametersJsonSchema: {
+    parameters: {
       type: 'object',
       properties: { date: { type: 'string', description: 'Calendar date as YYYY-MM-DD.' } },
       required: ['date'],
@@ -44,27 +46,11 @@ const tools = [
   },
 ]
 
-type GeminiCall = {
-  id?: string
-  name: string
-  args?: Record<string, unknown>
-}
-
-type GeminiContent = {
-  role: string
-  parts: Array<{
-    text?: string
-    thought?: boolean
-    functionCall?: GeminiCall
-    functionResponse?: { name: string; id?: string; response: { answer: string } }
-  }>
-}
-
 const money = new Intl.NumberFormat('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const taka = (poisha: number) => `${money.format(poisha / 100)} BDT`
 
-function salesAnswer(call: GeminiCall, orders: readonly Order[], menu: Menu): string {
-  const args = call.args
+function salesAnswer(call: Interactions.FunctionCallStep, orders: readonly Order[], menu: Menu): string {
+  const args: Record<string, unknown> = call.arguments
   switch (call.name) {
     case 'getOrderCount': {
       const count = getOrderCount(orders)
@@ -105,47 +91,35 @@ function salesAnswer(call: GeminiCall, orders: readonly Order[], menu: Menu): st
   }
 }
 
-async function askGemini(contents: GeminiContent[], apiKey: string, signal?: AbortSignal, phrasing = false) {
-  let response
+async function askGemini(ai: GoogleGenAI, input: Interactions.Step[], signal?: AbortSignal, phrasing = false) {
   try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: { parts: [{ text: [
-          'Choose exactly one sales tool to answer the question if a tool covers it. Otherwise reply UNSUPPORTED.',
-          'When the tool result arrives, return one of these templates with the literal [[RESULT]] marker.',
-          ...templates,
-        ].join('\n') }] },
-        tools: [{ functionDeclarations: tools }],
-        toolConfig: { functionCallingConfig: { mode: phrasing ? 'NONE' : 'AUTO' } },
-      }),
-    })
+    return await ai.interactions.create({
+      model,
+      input,
+      store: false,
+      automatic_continuation: false,
+      system_instruction: [
+        'Choose exactly one sales tool to answer the question if a tool covers it. Otherwise reply UNSUPPORTED.',
+        'When the tool result arrives, return one of these templates with the literal [[RESULT]] marker.',
+        ...templates,
+      ].join('\n'),
+      tools,
+      generation_config: { tool_choice: phrasing ? 'none' : 'auto' },
+    }, { signal, maxRetries: 0 })
   } catch (error) {
     if (signal?.aborted) throw error
-    throw new Error('Could not reach Gemini. Check your connection and try again.')
-  }
-
-  if (response.status === 429) throw new Error('Gemini quota or rate limit reached (429). Try again later.')
-  const data: {
-    candidates?: Array<{ content?: GeminiContent }>
-    error?: { message?: string; details?: Array<{ reason?: string }> }
-  } = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const keyRejected = data.error?.details?.some(({ reason }) => reason === 'API_KEY_INVALID')
-      || /api key.+(?:invalid|not valid|blocked|leaked)/i.test(data.error?.message ?? '')
-    if (response.status === 401 || response.status === 403 || keyRejected) {
+    const status = error && typeof error === 'object' && 'status' in error ? error.status : undefined
+    if (status === 429) throw new Error('Gemini quota or rate limit reached (429). Try again later.')
+    const message = error instanceof Error ? error.message : ''
+    const keyRejected = /API_KEY_INVALID|api key.+(?:invalid|not valid|blocked|leaked)/i.test(message)
+    if (status === 401 || status === 403 || keyRejected) {
       throw new Error('Gemini rejected the API key or project access. Check VITE_GEMINI_API_KEY and Google AI Studio.')
     }
-    throw new Error(`Gemini could not answer the request (HTTP ${response.status}). Try again.`)
+    if (typeof status === 'number') {
+      throw new Error(`Gemini could not answer the request (HTTP ${status}). Try again.`)
+    }
+    throw new Error('Could not reach Gemini. Check your connection and try again.')
   }
-
-  return data.candidates?.[0]?.content
 }
 
 export async function answerSalesQuestion(question: string, menu: Menu, apiKey: string, signal?: AbortSignal) {
@@ -154,25 +128,29 @@ export async function answerSalesQuestion(question: string, menu: Menu, apiKey: 
   }
   if (!apiKey.trim()) throw new Error(missingGeminiKey)
 
-  const input = { role: 'user', parts: [{ text: question }] }
-  const draft = await askGemini([input], apiKey, signal)
-  if (!draft) return unsupported
-  const calls = (draft.parts ?? []).flatMap((part) => part.functionCall ? [part.functionCall] : [])
+  const { GoogleGenAI: Client } = await import('@google/genai')
+  const ai = new Client({ apiKey: apiKey.trim(), apiVersion: 'v1beta' })
+  const input: Interactions.UserInputStep = { type: 'user_input', content: [{ type: 'text', text: question }] }
+  const draft = await askGemini(ai, [input], signal)
+  const steps = draft.steps ?? []
+  const calls = steps.filter((step) => step.type === 'function_call')
   const [call] = calls
-  if (calls.length !== 1 || !tools.some((tool) => tool.name === call.name)) return unsupported
+  if (calls.length !== 1 || !call.id || !tools.some((tool) => tool.name === call.name)) return unsupported
 
   const response = await fetch('/api/orders', { signal, cache: 'no-store' })
     .catch(() => { throw new Error('Could not load the latest sales orders. Try again.') })
   if (!response.ok) throw new Error('Could not load the latest sales orders. Try again.')
   const { orders }: OrdersExport = await response.json()
   const answer = salesAnswer(call, orders, menu)
-  const result: GeminiContent = {
-    role: 'user',
-    parts: [{ functionResponse: { name: call.name, id: call.id, response: { answer } } }],
+  const result: Interactions.FunctionResultStep = {
+    type: 'function_result',
+    name: call.name,
+    call_id: call.id,
+    result: [{ type: 'text', text: JSON.stringify({ answer }) }],
   }
   // Keep Gemini's full model turn, including any thought signature, for the tool response.
-  const phrasing = await askGemini([input, draft, result], apiKey, signal, true)
-  const template = phrasing?.parts?.filter((part) => !part.thought).map((part) => part.text).join('').trim()
+  const phrasing = await askGemini(ai, [input, ...steps, result], signal, true)
+  const template = phrasing.output_text?.trim()
 
   return template && templates.includes(template) ? template.replace('[[RESULT]]', () => answer) : answer
 }

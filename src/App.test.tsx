@@ -235,23 +235,30 @@ test('pays once using server-time totals and downloads the persisted order after
 test('TC-18 to TC-20 the sales assistant uses current orders and answers customer questions locally', async () => {
   vi.stubEnv('VITE_GEMINI_API_KEY', 'mock-gemini-key')
   const requests: unknown[] = []
-  server.use(http.post(/generativelanguage\.googleapis\.com\/v1beta\/models\/.*:generateContent$/, async ({ request }) => {
-    const body = await request.json() as { contents: Array<{ parts: Array<{ text?: string; functionResponse?: unknown }> }> }
+  server.use(http.post('https://generativelanguage.googleapis.com/v1beta/interactions', async ({ request }) => {
+    const body = await request.json() as {
+      model: string
+      store: boolean
+      input: Array<{ type: string; content?: Array<{ text: string }> }>
+    }
     requests.push(body)
-    if (body.contents.some(({ parts }) => parts.some((part) => part.functionResponse))) {
-      expect(body.contents[1].parts[0]).toMatchObject({ thoughtSignature: 'sample-signature' })
+    expect(body.model).toBe('gemini-3.5-flash-lite')
+    expect(body.store).toBe(false)
+    if (body.input.some((step) => step.type === 'function_result')) {
+      expect(body.input).toContainEqual({ type: 'thought', signature: 'sample-signature' })
       expect(JSON.stringify(body)).not.toContain('ORD-1001')
       expect(JSON.stringify(body)).not.toContain('payablePoisha')
-      return HttpResponse.json({ candidates: [{ content: {
-        role: 'model', parts: [{ text: 'There are 99 orders from an invented customer.' }],
-      } }] })
+      return HttpResponse.json({ status: 'completed', steps: [{
+        type: 'model_output',
+        content: [{ type: 'text', text: 'There are 99 orders from an invented customer.' }],
+      }] })
     }
-    const prompt = body.contents[0].parts[0].text ?? ''
+    const prompt = body.input[0].content?.[0].text ?? ''
     const name = prompt.includes('best-selling') ? 'getBestSellingOption' : 'getOrderCount'
-    return HttpResponse.json({ candidates: [{ content: {
-      role: 'model',
-      parts: [{ thoughtSignature: 'sample-signature', functionCall: { id: 'sales-call', name, args: {} } }],
-    } }] })
+    return HttpResponse.json({ status: 'completed', steps: [
+      { type: 'thought', signature: 'sample-signature' },
+      { type: 'function_call', id: 'sales-call', name, arguments: {} },
+    ] })
   }))
 
   render(<App />)

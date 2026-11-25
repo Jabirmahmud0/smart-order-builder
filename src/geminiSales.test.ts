@@ -29,9 +29,9 @@ test('shows a clear message when the network request fails', async () => {
 })
 
 test('uses a local fallback when Gemini offers text without a sales tool', async () => {
-  const fetch = vi.fn().mockResolvedValue(Response.json({ candidates: [{ content: {
-    role: 'model', parts: [{ text: 'The answer is 99.' }],
-  } }] }))
+  const fetch = vi.fn().mockResolvedValue(Response.json({ status: 'completed', steps: [{
+    type: 'model_output', content: [{ type: 'text', text: 'The answer is 99.' }],
+  }] }))
   vi.stubGlobal('fetch', fetch)
   await expect(answerSalesQuestion('What is the weather?', breakfastMenu, 'mock-key'))
     .resolves.toMatch(/^I can answer questions about order counts/)
@@ -40,13 +40,13 @@ test('uses a local fallback when Gemini offers text without a sales tool', async
 
 test('looks up a date locally and inserts its result into an approved response template', async () => {
   const fetch = vi.fn()
-    .mockResolvedValueOnce(Response.json({ candidates: [{ content: {
-      role: 'model', parts: [{ functionCall: { name: 'getOrdersOnDate', args: { date: '2026-11-21' } } }],
-    } }] }))
+    .mockResolvedValueOnce(Response.json({ status: 'completed', steps: [{
+      type: 'function_call', id: 'date-call', name: 'getOrdersOnDate', arguments: { date: '2026-11-21' },
+    }] }))
     .mockResolvedValueOnce(Response.json({ orders: createShop().orders }))
-    .mockResolvedValueOnce(Response.json({ candidates: [{ content: {
-      role: 'model', parts: [{ text: 'Here’s what the order records show. [[RESULT]]' }],
-    } }] }))
+    .mockResolvedValueOnce(Response.json({ status: 'completed', steps: [{
+      type: 'model_output', content: [{ type: 'text', text: 'Here’s what the order records show. [[RESULT]]' }],
+    }] }))
   vi.stubGlobal('fetch', fetch)
 
   await expect(answerSalesQuestion('Which orders were placed on 2026-11-21?', breakfastMenu, 'mock-key'))
