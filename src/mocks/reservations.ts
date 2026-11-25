@@ -127,3 +127,5 @@ export function readCart(cart: CartState, menu: Menu, now: number) {
     serverTime: new Date(now).toISOString(),
   }
 }
+
+export type CartSnapshot = ReturnType<typeof readCart>
