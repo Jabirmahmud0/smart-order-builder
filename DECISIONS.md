@@ -8,7 +8,7 @@ The cart subtotal is 165,950 poisha and the coupon takes off 15,000 poisha, leav
 
 ## D1 · Stock changes during an edit
 
-Save checks the server’s latest stock and credits Tab A with the ingredients its original item holds. If Tab B gets the extra eggs first, Tab A sees how many eggs are missing. The original item keeps its reservation until expiry, and the unsaved selections stay in the form so the user can adjust them.
+Both tabs use the same IndexedDB cart, and each save checks stock and writes the result in one transaction. Save credits Tab A with the ingredients its original item holds. If Tab B gets the extra eggs first, Tab A sees how many eggs are missing. The original item keeps its reservation until expiry, and the unsaved selections stay in the form so the user can adjust them.
 
 ## D2 · When prices lock
 
