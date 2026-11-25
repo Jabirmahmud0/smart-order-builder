@@ -1,15 +1,19 @@
 import { http, HttpResponse } from 'msw/http'
-import type { Configuration, Selection } from '../menu'
-import { runCartTransaction } from './cartStore'
-import { breakfastMenu } from './menu'
+import type { Configuration, Menu, Selection } from '../menu'
 import { editItem, readCart, removeItem, reserveItem, type CartState } from './reservations'
 import { serverNow } from './serverTime'
+import { shopMenu } from './shopState'
+import { runShopTransaction } from './shopStore'
 
-type CartOperation = (cart: CartState, now: number) => { state?: CartState; value: Response }
+type CartOperation = (cart: CartState, menu: Menu, now: number) => { state?: CartState; value: Response }
 
 async function handleCart(mode: 'readonly' | 'readwrite', operation: CartOperation) {
   try {
-    return await runCartTransaction((cart) => operation(cart, serverNow()), mode)
+    return await runShopTransaction((shop) => {
+      const result = operation(shop.cart, shopMenu(shop), serverNow())
+      const state = result.state && result.state !== shop.cart ? { ...shop, cart: result.state } : undefined
+      return { state, value: result.value }
+    }, mode)
   } catch {
     return HttpResponse.json({
       code: 'cart-unavailable',
@@ -35,11 +39,11 @@ function invalidRequest(message: string) {
   return HttpResponse.json({ code: 'invalid-request', message }, { status: 400 })
 }
 
-function respondToUpdate(update: ReturnType<typeof reserveItem>, cart: CartState, now: number) {
+function respondToUpdate(update: ReturnType<typeof reserveItem>, cart: CartState, menu: Menu, now: number) {
   if (update.ok) {
     return {
       state: update.state,
-      value: HttpResponse.json({ ...readCart(update.state, breakfastMenu, now), itemId: update.itemId }),
+      value: HttpResponse.json({ ...readCart(update.state, menu, now), itemId: update.itemId }),
     }
   }
 
@@ -47,15 +51,15 @@ function respondToUpdate(update: ReturnType<typeof reserveItem>, cart: CartState
   const { code, message } = update
   return {
     value: HttpResponse.json(
-      { code, message, cart: readCart(cart, breakfastMenu, now) },
+      { code, message, cart: readCart(cart, menu, now) },
       { status: status[code] },
     ),
   }
 }
 
 export const cartHandlers = [
-  http.get('*/api/cart', () => handleCart('readonly', (cart, now) => ({
-    value: HttpResponse.json(readCart(cart, breakfastMenu, now)),
+  http.get('*/api/cart', () => handleCart('readonly', (cart, menu, now) => ({
+    value: HttpResponse.json(readCart(cart, menu, now)),
   }))),
 
   http.post('*/api/cart/items', async ({ request }) => {
@@ -65,11 +69,11 @@ export const cartHandlers = [
     const selection = await readSelection(request)
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
-    return handleCart('readwrite', (cart, now) => {
-      const update = reserveItem(cart, breakfastMenu, {
+    return handleCart('readwrite', (cart, menu, now) => {
+      const update = reserveItem(cart, menu, {
         itemId: crypto.randomUUID(), idempotencyKey, selection,
       }, now)
-      return respondToUpdate(update, cart, now)
+      return respondToUpdate(update, cart, menu, now)
     })
   }),
 
@@ -77,16 +81,16 @@ export const cartHandlers = [
     const selection = await readSelection(request)
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
-    return handleCart('readwrite', (cart, now) => {
-      const update = editItem(cart, breakfastMenu, params.id, selection, now)
-      return respondToUpdate(update, cart, now)
+    return handleCart('readwrite', (cart, menu, now) => {
+      const update = editItem(cart, menu, params.id, selection, now)
+      return respondToUpdate(update, cart, menu, now)
     })
   }),
 
   http.delete<{ id: string }>('*/api/cart/items/:id', ({ params }) =>
-    handleCart('readwrite', (cart, now) => {
+    handleCart('readwrite', (cart, menu, now) => {
       const state = removeItem(cart, params.id)
-      return { state, value: HttpResponse.json(readCart(state, breakfastMenu, now)) }
+      return { state, value: HttpResponse.json(readCart(state, menu, now)) }
     }),
   ),
 ]

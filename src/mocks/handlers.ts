@@ -3,10 +3,12 @@ import { delay } from 'msw/utils/delay'
 import { priceCart, type PricingCart } from '../pricing'
 import { cartHandlers } from './cartHandlers'
 import { breakfastMenu } from './menu'
+import { orderHandlers } from './orderHandlers'
 import { serverNow } from './serverTime'
 
 export const handlers = [
   ...cartHandlers,
+  ...orderHandlers,
   http.get('*/api/menu', () => HttpResponse.json(breakfastMenu)),
   http.post('*/api/price', async ({ request }) => {
     const cart = await request.json() as PricingCart

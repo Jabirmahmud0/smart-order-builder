@@ -50,6 +50,7 @@ test('TC-13 concurrent requests for the same add create exactly one reservation'
 })
 
 test('TC-14 an aborted write rolls back the whole reservation and the same key can be retried', async () => {
+  expect((await fetch(cartUrl)).status).toBe(200)
   const originalPut = IDBObjectStore.prototype.put
   vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (this: IDBObjectStore, ...args) {
     const request = originalPut.apply(this, args)

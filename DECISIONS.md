@@ -17,3 +17,11 @@ An item reservation holds ingredients. Until payment, cart totals are recalculat
 ## D3 · Expiry during an edit
 
 An edit keeps the item’s original reservation deadline. When that deadline passes, stock becomes available again and the cart item becomes read-only. The edit form keeps the draft visible, tells the user the reservation expired, and disables Save. If Save reaches the server at the deadline, it returns the same expiry message.
+
+## D4 · Checkout identity
+
+The mock API creates the order ID and timestamps it with server time when it accepts Pay. The browser sends an idempotency key for each payment attempt and reuses it on retry. The cart clear, sale, and key are written in the same transaction, so a repeated Pay with the same key returns the original order. A separate Pay request arriving after the cart was cleared finds no active items.
+
+## D6 · Stored order JSON
+
+An export has `schemaVersion`, `currency`, `moneyUnit`, and an `orders` array. Each order records `id`, `createdAt`, `paymentMethod`, the selected `lines` with their quantities, and a `pricing` object containing per-line prices, discounts, subtotal, VAT, and payable in integer poisha. The `couponCode` field records the submitted code, and `appliedCouponCode` is null whenever the coupon did not win the discount or was ineligible.
