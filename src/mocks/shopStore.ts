@@ -1,4 +1,3 @@
-import type { CartState } from './reservations'
 import { createShop, type ShopState } from './shopState'
 
 const databaseName = 'smart-order-builder'
@@ -14,7 +13,7 @@ function openShopDatabase(): Promise<IDBDatabase> {
         : request.transaction!.objectStore(storeName)
       const previous = store.get(shopKey)
       previous.onsuccess = () => {
-        const cart: CartState | undefined = previous.result
+        const cart: Parameters<typeof createShop>[0] = previous.result
         store.put(JSON.stringify(createShop(cart)), shopKey)
       }
     }
@@ -45,6 +44,7 @@ export async function runShopTransaction<Value>(
       request.onsuccess = () => {
         try {
           const shop: ShopState = JSON.parse(request.result)
+          shop.cart.version ??= 0
           const result = operation(shop)
           value = result.value
           if (result.state && result.state !== shop) store.put(JSON.stringify(result.state), shopKey)

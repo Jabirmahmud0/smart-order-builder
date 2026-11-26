@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw/http'
 import { isPaymentMethod, priceOrder, type CheckoutPayment, type OrdersExport } from '../orders'
+import { cartVersionConflict } from './cartVersion'
 import { readCart } from './reservations'
 import { serverNow } from './serverTime'
 import { shopMenu, type ShopState } from './shopState'
@@ -13,20 +14,24 @@ function rejectPayment(message: string) {
   return HttpResponse.json({ message }, { status: 400 })
 }
 
-function checkout(shop: ShopState, payment: CheckoutPayment, key: string, now: number) {
+function checkout(shop: ShopState, payment: CheckoutPayment, key: string, now: number, request: Request) {
+  const menu = shopMenu(shop)
   if (Object.hasOwn(shop.successfulPayments, key)) {
     const order = shop.orders.find((candidate) => candidate.id === shop.successfulPayments[key])
     return {
-      value: HttpResponse.json({ order, cart: readCart(shop.cart, shopMenu(shop), now) }),
+      value: HttpResponse.json({ order, cart: readCart(shop.cart, menu, now) }),
     }
   }
+
+  const conflict = cartVersionConflict(request, shop.cart, menu, now)
+  if (conflict) return { value: conflict }
 
   const active = shop.cart.items.filter((item) => item.expiresAt > now)
   if (active.length === 0) {
     return {
       value: HttpResponse.json({
         message: 'There are no active items to pay for.',
-        cart: readCart(shop.cart, shopMenu(shop), now),
+        cart: readCart(shop.cart, menu, now),
       }, { status: 409 }),
     }
   }
@@ -36,7 +41,7 @@ function checkout(shop: ShopState, payment: CheckoutPayment, key: string, now: n
     createdAt: new Date(now).toISOString(),
     ...payment,
     lines: active.map(({ options, qty }) => ({ options, qty })),
-  }, shopMenu(shop))
+  }, menu)
 
   const sold = new Map(Object.entries(shop.sold))
   for (const item of active) {
@@ -46,7 +51,7 @@ function checkout(shop: ShopState, payment: CheckoutPayment, key: string, now: n
   }
 
   const state: ShopState = {
-    cart: { ...shop.cart, items: [] },
+    cart: { ...shop.cart, version: shop.cart.version + 1, items: [] },
     sold: Object.fromEntries(sold),
     orders: [...shop.orders, order],
     successfulPayments: { ...shop.successfulPayments, [key]: order.id },
@@ -76,6 +81,6 @@ export const orderHandlers = [
     }
 
     const payment = { paymentMethod: body.paymentMethod, couponCode: body.couponCode?.trim() || null }
-    return runShopTransaction((shop) => checkout(shop, payment, key, serverNow()), 'readwrite').catch(unavailable)
+    return runShopTransaction((shop) => checkout(shop, payment, key, serverNow(), request), 'readwrite').catch(unavailable)
   }),
 ]

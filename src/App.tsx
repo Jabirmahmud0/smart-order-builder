@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CartPanel } from './CartPanel'
 import { CheckoutPanel } from './CheckoutPanel'
+import { emptySelection, loadEditor, storeEditor } from './editorStorage'
 import type { IngredientAmounts, Menu, MenuGroup, Selection } from './menu'
 import { groupForViolation, menuGroupId } from './menuDisplay'
 import { MenuOptions } from './MenuOptions'
@@ -55,8 +56,6 @@ export default function App() {
   )
 }
 
-const emptySelection: Selection = { options: {}, qty: 1 }
-
 function stockForDraft(
   cart: CartSnapshot | undefined,
   fallback: IngredientAmounts,
@@ -77,11 +76,10 @@ function stockForDraft(
 }
 
 function MenuBuilder({ menu }: { menu: Menu }) {
-  const [draft, setDraft] = useState(emptySelection)
-  const [edit, setEdit] = useState<{ id: string; selection: Selection } | null>(null)
+  const [editor, setEditor] = useState(() => loadEditor(menu))
+  const { draft, edit } = editor
   const [saveError, setSaveError] = useState<{ message: string; retryable: boolean } | null>(null)
   const [removeError, setRemoveError] = useState('')
-  const addKey = useRef<string | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const orderPanel = useRef<HTMLDialogElement>(null)
   const [compact, setCompact] = useState(() => window.matchMedia?.('(max-width: 759px)').matches ?? false)
@@ -94,8 +92,8 @@ function MenuBuilder({ menu }: { menu: Menu }) {
   const quote = usePricePreview(config, itemQuantity)
   const original = cart?.items.find((item) => item.id === edit?.id)
   let editUnavailable = ''
-  if (edit && !original) editUnavailable = 'This cart item is no longer in the cart.'
-  if (original && (original.expired || original.expiresAt <= serverTime)) {
+  if (edit && cart && !original) editUnavailable = 'This cart item is no longer in the cart.'
+  if (edit && (original?.expired || (original?.expiresAt ?? edit.expiresAt) <= serverTime)) {
     editUnavailable = 'This reservation expired.'
   }
 
@@ -117,6 +115,8 @@ function MenuBuilder({ menu }: { menu: Menu }) {
   const saveDisabled = controlsDisabled || !cart || violations.length > 0 || draftShortages.length > 0
   const saveLabel = edit ? 'Save changes' : 'Add to Cart'
   const cartCount = cart?.items.reduce((count, item) => count + item.qty, 0) ?? 0
+
+  useEffect(() => storeEditor(editor), [editor])
 
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 759px)')
@@ -145,10 +145,12 @@ function MenuBuilder({ menu }: { menu: Menu }) {
   function updateSelection(update: (current: Selection) => Selection) {
     setSaveError(null)
     if (edit) {
-      setEdit((current) => current && { ...current, selection: update(current.selection) })
+      setEditor((current) => current.edit
+        ? { ...current, edit: { ...current.edit, selection: update(current.edit.selection) } }
+        : current)
     } else {
-      addKey.current = null
-      setDraft(update)
+      const draftKey = crypto.randomUUID()
+      setEditor((current) => ({ ...current, draft: update(current.draft), draftKey }))
     }
   }
 
@@ -169,32 +171,42 @@ function MenuBuilder({ menu }: { menu: Menu }) {
     if (saveDisabled) return
     const headers = new Headers({ 'Content-Type': 'application/json' })
     if (!edit) {
-      addKey.current ??= crypto.randomUUID()
-      headers.set('Idempotency-Key', addKey.current)
+      headers.set('Idempotency-Key', editor.draftKey)
+      storeEditor(editor)
     }
     const result = await mutate(edit ? `/items/${edit.id}` : '/items', {
       method: edit ? 'PATCH' : 'POST',
       headers,
       body: JSON.stringify(selection),
-    })
+    }, edit?.version)
     if (!result) return
     if (!result.ok) {
       setSaveError(result.error)
+      const { latestVersion } = result.error
+      if (latestVersion !== undefined) {
+        setEditor((current) => current.edit ? { ...current, edit: { ...current.edit, version: latestVersion } } : current)
+      }
       if (compact && !orderPanel.current?.open) openOrder()
       return
     }
 
     setSaveError(null)
-    if (edit) setEdit(null)
+    if (edit) setEditor((current) => ({ ...current, edit: null }))
     else {
-      addKey.current = null
-      setDraft(emptySelection)
+      setEditor({ draft: emptySelection, edit: null, draftKey: crypto.randomUUID() })
     }
   }
 
   function startEdit(item: CartSnapshot['items'][number]) {
+    if (!cart) return
     setSaveError(null)
-    setEdit({ id: item.id, selection: { options: item.options, qty: item.qty } })
+    setEditor((current) => ({
+      ...current,
+      edit: {
+        id: item.id, version: cart.version, expiresAt: item.expiresAt,
+        selection: { options: item.options, qty: item.qty },
+      },
+    }))
     if (compact && orderPanel.current?.open) orderPanel.current.close()
     heading.current?.focus()
   }
@@ -250,7 +262,7 @@ function MenuBuilder({ menu }: { menu: Menu }) {
         {edit && (
           <button type="button" disabled={busy} onClick={() => {
             setSaveError(null)
-            setEdit(null)
+            setEditor((current) => ({ ...current, edit: null }))
           }}>Cancel edit</button>
         )}
       </div>

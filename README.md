@@ -2,6 +2,8 @@
 
 Configure a breakfast, reserve its ingredients, and check out. The sales assistant answers questions from the same order records used by the JSON export.
 
+[Live demo](https://smart-order-builder-demo.vercel.app/)
+
 ## Setup
 
 Use Node.js 22.13 or later on the 22.x line, or Node.js 24 or later. The project was tested with Node.js 22.23.5.
@@ -29,13 +31,15 @@ For the assistant, copy `.env.example` to `.env.local`, set `VITE_GEMINI_API_KEY
 
 ## Trade-offs and remaining work
 
+- All mandatory parts (A–F) and bonus items (Part G) are implemented.
 - Mock data is shared by tabs on the same browser origin. It stays in that browser’s IndexedDB.
-- Expired reservations release their stock and remain visible for removal. Tabs refresh their snapshots on focus and periodically while the app is open.
+- Expired reservations release stock immediately. They remain visible for removal in an open tab and are pruned at the server when the app reloads.
+- Cart writes carry the displayed version. A stale write reloads the cart from the conflict response and keeps the unsaved selection for review. New selections and edits survive a reload in the same tab through session storage.
 - Vite includes client environment variables in the application it serves. Build the public demo from a clean checkout without `.env.local` or `VITE_GEMINI_API_KEY` set.
-- Part G’s refresh cleanup, stale-tab version check, and draft persistence remain. The live demo is pending.
+- The public demo runs the mock order flow. Gemini questions use the local setup with an assessment key.
 
 See [DECISIONS.md](DECISIONS.md) for the decisions and checkpoints, and [ANSWERS.md](ANSWERS.md) for the computed results.
 
 ## Hours spent
 
-Provisional estimate of **8 hours**, pending the final time log.
+**13 hours.**

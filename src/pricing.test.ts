@@ -78,3 +78,24 @@ test('the two cheapest extra units are free before the combo discount for each c
     lineTotalPoisha: 137_700,
   })
 })
+
+test('handles disabled item promotions and case-insensitive coupon codes', () => {
+  const promos = {
+    ...promotions,
+    extras: { ...promotions.extras, unitsPerFree: 0 },
+    combo: { ...promotions.combo, minimums: {} },
+  }
+  const pricing = priceCart(
+    { lines: [{ options: configC, qty: 1 }], couponCode: ' morning15 ' },
+    breakfastMenu,
+    promos,
+    beforeCutoff,
+  )
+
+  expect(pricing.lines[0]).toMatchObject({
+    unitSubtotalPoisha: 51_500,
+    unitDiscounts: [],
+    unitPricePoisha: 51_500,
+  })
+  expect(pricing.cartDiscount).toEqual({ id: 'C2', amountPoisha: 7_725 })
+})

@@ -12,14 +12,14 @@ export type ShopState = {
   successfulPayments: Readonly<Record<string, string>>
 }
 
-export function createShop(cart: CartState = emptyCart): ShopState {
+export function createShop(cart: Omit<CartState, 'version'> & { version?: number } = emptyCart): ShopState {
   const orders = seed.orders.map((order) => {
     if (!isPaymentMethod(order.paymentMethod)) throw new Error('Invalid seed payment method.')
     const lines = order.lines.map(({ qty, options }) => ({ qty, options: options as Configuration }))
     return priceOrder({ ...order, lines, paymentMethod: order.paymentMethod }, breakfastMenu)
   })
 
-  return { cart, sold: {}, orders, successfulPayments: {} }
+  return { cart: { ...cart, version: cart.version ?? 0 }, sold: {}, orders, successfulPayments: {} }
 }
 
 export function shopMenu(shop: ShopState): Menu {

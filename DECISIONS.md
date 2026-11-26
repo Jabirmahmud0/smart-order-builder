@@ -24,7 +24,7 @@ Each function reads the current stored orders. Revenue uses the final payable am
 
 ## D1 · Stock changes during an edit
 
-Both tabs use the same IndexedDB cart, and each save checks stock and writes the result in one transaction. Save credits Tab A with the ingredients its original item holds. If Tab B gets the extra eggs first, Tab A sees how many eggs are missing. The original item keeps its reservation until expiry, and the unsaved selections stay in the form so the user can adjust them.
+Both tabs use the same IndexedDB cart. Each save checks the cart version and stock in one transaction, with credit for the ingredients the original item holds. If Tab B changes the cart first, Tab A receives a conflict and the latest cart. The editor keeps Tab A’s selection and shows the exact shortage if the new snapshot leaves too few eggs. The original item keeps its reservation until expiry, and Tab A can adjust and explicitly save again.
 
 ## D2 · When prices lock
 
@@ -36,7 +36,7 @@ An edit keeps the item’s original reservation deadline. When that deadline pas
 
 ## D4 · Checkout identity
 
-The mock API creates the order ID and timestamps it with server time when it accepts Pay. The browser sends an idempotency key for each payment attempt and reuses it on retry. The cart clear, sale, and key are written in the same transaction, so a repeated Pay with the same key returns the original order. A separate Pay request arriving after the cart was cleared finds no active items.
+The mock API creates the order ID and timestamps it with server time when it accepts Pay. The browser sends an idempotency key for each payment attempt and reuses it on retry. The cart clear, sale, and key are written in the same transaction, so a repeated Pay with the same key returns the original order. A new payment attempt against a stale cart gets a version conflict. A payment against the current empty cart gets a message that there are no active items to pay for.
 
 ## D5 · Customer questions
 

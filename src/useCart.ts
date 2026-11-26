@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { cartVersionConflictCode, cartVersionHeader } from './mocks/cartVersion'
 import type { CartSnapshot } from './mocks/reservations'
 import type { CheckoutPayment, Order } from './orders'
 
 type CartError = {
   message: string
   retryable: boolean
+  latestVersion?: number
 }
 
 type MutationResult<Value> = { ok: true; value: Value } | { ok: false; error: CartError }
@@ -17,6 +19,7 @@ export function useCart() {
   const [busy, setBusy] = useState(false)
   const writing = useRef(false)
   const reading = useRef<AbortController | null>(null)
+  const firstLoad = useRef(true)
 
   const acceptCart = useCallback((cart: CartSnapshot) => {
     const at = performance.now()
@@ -30,10 +33,14 @@ export function useCart() {
     const controller = new AbortController()
     reading.current = controller
     try {
-      const response = await fetch('/api/cart', { signal: controller.signal })
+      const path = firstLoad.current ? '/api/cart?cleanup=expired' : '/api/cart'
+      const response = await fetch(path, { signal: controller.signal })
       if (!response.ok) throw new Error('Cart request failed')
       const cart: CartSnapshot = await response.json()
-      if (!controller.signal.aborted) acceptCart(cart)
+      if (!controller.signal.aborted) {
+        firstLoad.current = false
+        acceptCart(cart)
+      }
     } catch {
       if (!controller.signal.aborted) setLoadError(true)
     } finally {
@@ -60,26 +67,33 @@ export function useCart() {
     url: string,
     request: RequestInit,
     cartFrom: (value: Value) => CartSnapshot,
+    version = received?.cart.version,
   ): Promise<MutationResult<Value> | null> {
-    if (writing.current) return null
+    if (writing.current || version === undefined) return null
+    const headers = new Headers(request.headers)
+    headers.set(cartVersionHeader, String(version))
     writing.current = true
     reading.current?.abort()
     reading.current = null
     setBusy(true)
 
     try {
-      const response = await fetch(url, request)
+      const response = await fetch(url, { ...request, headers })
       if (response.ok) {
         const value: Value = await response.json()
         acceptCart(cartFrom(value))
         return { ok: true, value }
       }
 
-      const error: { message?: string; cart?: CartSnapshot } = await response.json().catch(() => ({}))
+      const error: { code?: string; message?: string; cart?: CartSnapshot } = await response.json().catch(() => ({}))
       if (error.cart) acceptCart(error.cart)
       return {
         ok: false,
-        error: { message: error.message ?? 'Could not update the cart.', retryable: response.status >= 500 },
+        error: {
+          message: error.message ?? 'Could not update the cart.',
+          retryable: response.status >= 500,
+          latestVersion: error.code === cartVersionConflictCode ? error.cart?.version : undefined,
+        },
       }
     } catch {
       return { ok: false, error: { message: 'Could not reach the cart. Please retry.', retryable: true } }
@@ -89,8 +103,8 @@ export function useCart() {
     }
   }
 
-  function mutate(path: string, request: RequestInit) {
-    return requestMutation<CartSnapshot>(`/api/cart${path}`, request, (cart) => cart)
+  function mutate(path: string, request: RequestInit, version?: number) {
+    return requestMutation<CartSnapshot>(`/api/cart${path}`, request, (cart) => cart, version)
   }
 
   function pay(payment: CheckoutPayment, key: string) {

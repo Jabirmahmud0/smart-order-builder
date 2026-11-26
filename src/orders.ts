@@ -36,7 +36,7 @@ export function priceOrder(order: OrderInput, menu: Menu): Order {
 
   return {
     ...order,
-    appliedCouponCode: pricing.cartDiscount?.id === menu.promotions.coupon.id ? order.couponCode : null,
+    appliedCouponCode: pricing.cartDiscount?.id === menu.promotions.coupon.id ? menu.promotions.coupon.code : null,
     pricing,
   }
 }

@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw/http'
 import type { Menu } from '../menu'
-import { editItem, readCart, removeItem, reserveItem, type CartState } from './reservations'
+import { cartVersionConflict } from './cartVersion'
+import { editItem, pruneExpiredReservations, readCart, removeItem, reserveItem, type CartState } from './reservations'
 import { parseSelection } from './selectionRequest'
 import { serverNow } from './serverTime'
 import { shopMenu } from './shopState'
@@ -46,9 +47,13 @@ function respondToUpdate(update: ReturnType<typeof reserveItem>, cart: CartState
 }
 
 export const cartHandlers = [
-  http.get('*/api/cart', () => handleCart('readonly', (cart, menu, now) => ({
-    value: HttpResponse.json(readCart(cart, menu, now)),
-  }))),
+  http.get('*/api/cart', ({ request }) => {
+    const prune = new URL(request.url).searchParams.get('cleanup') === 'expired'
+    return handleCart(prune ? 'readwrite' : 'readonly', (cart, menu, now) => {
+      const state = prune ? pruneExpiredReservations(cart, now) : cart
+      return { state, value: HttpResponse.json(readCart(state, menu, now)) }
+    })
+  }),
 
   http.post('*/api/cart/items', async ({ request }) => {
     const idempotencyKey = request.headers.get('Idempotency-Key')
@@ -58,6 +63,11 @@ export const cartHandlers = [
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
     return handleCart('readwrite', (cart, menu, now) => {
+      if (!Object.hasOwn(cart.successfulAdds, idempotencyKey)) {
+        const conflict = cartVersionConflict(request, cart, menu, now)
+        if (conflict) return { value: conflict }
+      }
+
       const update = reserveItem(cart, menu, {
         itemId: crypto.randomUUID(), idempotencyKey, selection,
       }, now)
@@ -70,13 +80,17 @@ export const cartHandlers = [
     if (!selection) return invalidRequest('Send option quantities and an item quantity.')
 
     return handleCart('readwrite', (cart, menu, now) => {
+      const conflict = cartVersionConflict(request, cart, menu, now)
+      if (conflict) return { value: conflict }
       const update = editItem(cart, menu, params.id, selection, now)
       return respondToUpdate(update, cart, menu, now)
     })
   }),
 
-  http.delete<{ id: string }>('*/api/cart/items/:id', ({ params }) =>
+  http.delete<{ id: string }>('*/api/cart/items/:id', ({ request, params }) =>
     handleCart('readwrite', (cart, menu, now) => {
+      const conflict = cartVersionConflict(request, cart, menu, now)
+      if (conflict) return { value: conflict }
       const state = removeItem(cart, params.id)
       return { state, value: HttpResponse.json(readCart(state, menu, now)) }
     }),

@@ -64,6 +64,7 @@ export function SalesAssistant({ menu }: { menu: Menu }) {
       }
     } catch (problem) {
       if (!controller.signal.aborted) {
+        setTurns((previous) => previous.slice(0, -1))
         setQuestion(text)
         setError(problem instanceof Error ? problem.message : 'Could not answer the sales question.')
       }

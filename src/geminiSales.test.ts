@@ -34,11 +34,23 @@ test('uses a local fallback when Gemini offers text without a sales tool', async
   }] }))
   vi.stubGlobal('fetch', fetch)
   await expect(answerSalesQuestion('What is the weather?', breakfastMenu, 'mock-key'))
-    .resolves.toMatch(/^I can answer questions about order counts/)
+    .resolves.toMatch(/^I cannot answer that from the stored order data\./)
   expect(fetch).toHaveBeenCalledTimes(1)
 })
 
-test('looks up a date locally and inserts its result into an approved response template', async () => {
+test.each([
+  'Who is our best customer?',
+  'Who spent the most?',
+  'Which customer ordered the most?',
+])('refuses customer identity question %s without calling Gemini', async (prompt) => {
+  const fetch = vi.fn()
+  vi.stubGlobal('fetch', fetch)
+  await expect(answerSalesQuestion(prompt, breakfastMenu, 'mock-key'))
+    .resolves.toBe('Customer information is unavailable because the orders contain no customer records.')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('looks up a date locally, includes today in Dhaka in the prompt, and inserts its result into a template', async () => {
   const fetch = vi.fn()
     .mockResolvedValueOnce(Response.json({ status: 'completed', steps: [{
       type: 'function_call', id: 'date-call', name: 'getOrdersOnDate', arguments: { date: '2026-11-21' },
@@ -51,4 +63,9 @@ test('looks up a date locally and inserts its result into an approved response t
 
   await expect(answerSalesQuestion('Which orders were placed on 2026-11-21?', breakfastMenu, 'mock-key'))
     .resolves.toBe('Here’s what the order records show. 2 orders on 2026-11-21 in Dhaka. Order IDs are ORD-1003, ORD-1004.')
+  const [firstRequest, firstInit] = fetch.mock.calls[0]
+  const firstBody = (firstRequest instanceof Request
+    ? await firstRequest.json()
+    : JSON.parse(String(firstInit?.body))) as { system_instruction?: string }
+  expect(firstBody.system_instruction).toMatch(/Today is \d{4}-\d{2}-\d{2} in Asia\/Dhaka\./)
 })

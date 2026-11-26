@@ -11,11 +11,12 @@ type CartItem = Selection & {
 }
 
 export type CartState = {
+  version: number
   items: readonly CartItem[]
   successfulAdds: Readonly<Record<string, string>>
 }
 
-export const emptyCart: CartState = { items: [], successfulAdds: {} }
+export const emptyCart: CartState = { version: 0, items: [], successfulAdds: {} }
 
 type Rejection = {
   ok: false
@@ -82,6 +83,7 @@ export function reserveItem(
     expiresAt: now + reservationDurationMs,
   }
   const state: CartState = {
+    version: cart.version + 1,
     items: [...cart.items, item],
     successfulAdds: { ...cart.successfulAdds, [idempotencyKey]: itemId },
   }
@@ -113,15 +115,25 @@ export function editItem(
     ingredients: prepared.ingredients,
   }
   const items = cart.items.map((candidate) => candidate.id === itemId ? replacement : candidate)
-  return { ok: true, state: { ...cart, items }, itemId }
+  return { ok: true, state: { ...cart, version: cart.version + 1, items }, itemId }
 }
 
 export function removeItem(cart: CartState, itemId: string): CartState {
-  return { ...cart, items: cart.items.filter((item) => item.id !== itemId) }
+  return filterCartItems(cart, (item) => item.id !== itemId)
+}
+
+export function pruneExpiredReservations(cart: CartState, now: number): CartState {
+  return filterCartItems(cart, (item) => item.expiresAt > now)
+}
+
+function filterCartItems(cart: CartState, keep: (item: CartItem) => boolean): CartState {
+  const items = cart.items.filter(keep)
+  return items.length === cart.items.length ? cart : { ...cart, version: cart.version + 1, items }
 }
 
 export function readCart(cart: CartState, menu: Menu, now: number) {
   return {
+    version: cart.version,
     items: cart.items.map((item) => ({ ...item, expired: item.expiresAt <= now })),
     stock: stockForCart(cart, menu.stock, now),
     serverTime: new Date(now).toISOString(),

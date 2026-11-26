@@ -2,6 +2,7 @@ import { IDBFactory, IDBObjectStore } from 'fake-indexeddb'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import type { Order, OrdersExport } from '../orders'
+import { cartVersionConflictCode, cartVersionHeader } from './cartVersion'
 import { handlers } from './handlers'
 import type { CartSnapshot } from './reservations'
 
@@ -17,10 +18,10 @@ afterEach(() => {
 })
 afterAll(() => server.close())
 
-function post(path: string, key: string, body: object) {
+function post(path: string, key: string, body: object, version = 0) {
   return fetch(api + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key, [cartVersionHeader]: String(version) },
     body: JSON.stringify(body),
   })
 }
@@ -53,8 +54,8 @@ test('TC-16 concurrent Pay requests create one order and sold stock stays deduct
 
   const payment = { paymentMethod: 'card', couponCode: 'MORNING15' }
   const responses = await Promise.all([
-    post('/checkout', 'pay', payment),
-    post('/checkout', 'pay', payment),
+    post('/checkout', 'pay', payment, 1),
+    post('/checkout', 'pay', payment, 1),
   ])
   expect(responses.map((response) => response.status)).toEqual([200, 200])
   const results: Array<{ order: Order; cart: CartSnapshot }> = await Promise.all(
@@ -68,7 +69,7 @@ test('TC-16 concurrent Pay requests create one order and sold stock stays deduct
     pricing: { payablePoisha: 33_900 },
   })
   expect(results[0].cart).toMatchObject({ items: [], stock: { egg: 8, toast: 19, sausage: 3 } })
-  expect((await post('/checkout', 'pay-again', payment)).status).toBe(409)
+  expect((await post('/checkout', 'pay-again', payment, 2)).status).toBe(409)
 
   browserTime += 300_000
   const cart: CartSnapshot = await (await fetch(api + '/cart')).json()
@@ -88,13 +89,13 @@ test('rolls back the order and stock change if the checkout transaction aborts',
   })
 
   const payment = { paymentMethod: 'cash' }
-  expect((await post('/checkout', 'pay', payment)).status).toBe(503)
+  expect((await post('/checkout', 'pay', payment, 1)).status).toBe(503)
   expect((await orders()).orders).toHaveLength(6)
   const cart: CartSnapshot = await (await fetch(api + '/cart')).json()
   expect(cart.items).toHaveLength(1)
   expect(cart.stock.egg).toBe(8)
 
-  expect((await post('/checkout', 'pay', payment)).status).toBe(200)
+  expect((await post('/checkout', 'pay', payment, cart.version)).status).toBe(200)
   expect((await orders()).orders).toHaveLength(7)
 })
 
@@ -104,15 +105,26 @@ test('checkout includes only active items and clears expired rows', async () => 
   expect((await post('/cart/items', 'first', breakfast)).status).toBe(200)
   browserTime += 240_000
   const active = { ...breakfast, qty: 2 }
-  expect((await post('/cart/items', 'second', active)).status).toBe(200)
+  expect((await post('/cart/items', 'second', active, 1)).status).toBe(200)
   browserTime += 60_000
 
-  const response = await post('/checkout', 'pay', { paymentMethod: 'bkash' })
+  const response = await post('/checkout', 'pay', { paymentMethod: 'bkash' }, 2)
   expect(response.status).toBe(200)
   expect(await response.json()).toMatchObject({
     order: { lines: [active] },
     cart: { items: [], stock: { egg: 6, toast: 18, sausage: 2 } },
   })
+})
+
+test('stale checkout returns the updated cart and creates no order', async () => {
+  expect((await post('/cart/items', 'add', breakfast)).status).toBe(200)
+  const response = await post('/checkout', 'stale-pay', { paymentMethod: 'cash' })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({
+    code: cartVersionConflictCode,
+    cart: { version: 1, items: [breakfast] },
+  })
+  expect((await orders()).orders).toHaveLength(6)
 })
 
 test('preserves reservations and add keys when upgrading the previously stored cart', async () => {

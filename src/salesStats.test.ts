@@ -35,7 +35,17 @@ test('groups payable revenue by payment method', () => {
 
 test('counts the three seed orders that received the coupon', () => {
   expect(getCouponUseCount(orders, 'MORNING15')).toBe(3)
+  expect(getCouponUseCount(orders, 'morning15')).toBe(3)
   expect(getCouponUseCount(orders, 'UNKNOWN')).toBe(0)
+})
+
+test('rounds average order value half-up in integer poisha', () => {
+  const twentyOrders = Array.from({ length: 20 }, (_, index) => ({
+    ...orders[0],
+    id: `ORD-${index}`,
+    pricing: { ...orders[0].pricing, payablePoisha: index === 0 ? 150_950 : 0 },
+  }))
+  expect(getAverageOrderValue(twentyOrders)).toBe(7_548)
 })
 
 test('finds order IDs by the Dhaka calendar date', () => {

@@ -44,11 +44,14 @@ export function getRevenueByPaymentMethod(orders: readonly Order[]): Record<Paym
 }
 
 export function getAverageOrderValue(orders: readonly Order[]): number | null {
-  return orders.length === 0 ? null : Math.round(getTotalRevenue(orders) / orders.length)
+  if (orders.length === 0) return null
+  return Math.floor((2 * getTotalRevenue(orders) + orders.length) / (2 * orders.length))
 }
 
 export function getCouponUseCount(orders: readonly Order[], couponCode: string): number {
-  return orders.filter((order) => order.appliedCouponCode === couponCode).length
+  const expected = couponCode.trim().toUpperCase()
+  if (!expected) return 0
+  return orders.filter((order) => order.appliedCouponCode?.toUpperCase() === expected).length
 }
 
 export function getOrdersOnDate(orders: readonly Order[], date: string) {

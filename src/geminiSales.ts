@@ -12,8 +12,9 @@ import {
 } from './salesStats'
 
 const model = 'gemini-3.5-flash-lite'
-const unsupported = 'I can answer questions about order counts, revenue, best-selling options, payment methods, average order value, coupons, and orders on a specific date.'
+const unsupported = 'I cannot answer that from the stored order data. I can answer questions about order counts, revenue, best-selling options, payment methods, average order value, coupons, and orders on a specific date.'
 export const missingGeminiKey = 'Set VITE_GEMINI_API_KEY in .env.local and restart the app to use Gemini.'
+const customerQuestion = /\b(?:best|top|biggest|loyal|highest[- ]spending|favorite|favourite) customers?\b|\b(?:who|which)\b.*\b(?:customer|buyer|person|people)\b|\bcustomer (?:names?|records?|details?|list|info|information)\b|\bwho\s+(?:bought|ordered|spent|paid)\b/i
 const templates = [
   '[[RESULT]]',
   'Based on the stored orders, [[RESULT]]',
@@ -91,7 +92,24 @@ function salesAnswer(call: Interactions.FunctionCallStep, orders: readonly Order
   }
 }
 
-async function askGemini(ai: GoogleGenAI, input: Interactions.Step[], signal?: AbortSignal, phrasing = false) {
+function currentDateInTimeZone(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const { year, month, day } = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${year}-${month}-${day}`
+}
+
+async function askGemini(
+  ai: GoogleGenAI,
+  input: Interactions.Step[],
+  timeZone: string,
+  signal?: AbortSignal,
+  phrasing = false,
+) {
   try {
     return await ai.interactions.create({
       model,
@@ -99,6 +117,7 @@ async function askGemini(ai: GoogleGenAI, input: Interactions.Step[], signal?: A
       store: false,
       automatic_continuation: false,
       system_instruction: [
+        `Today is ${currentDateInTimeZone(timeZone)} in ${timeZone}.`,
         'Choose exactly one sales tool to answer the question if a tool covers it. Otherwise reply UNSUPPORTED.',
         'When the tool result arrives, return one of these templates with the literal [[RESULT]] marker.',
         ...templates,
@@ -123,15 +142,16 @@ async function askGemini(ai: GoogleGenAI, input: Interactions.Step[], signal?: A
 }
 
 export async function answerSalesQuestion(question: string, menu: Menu, apiKey: string, signal?: AbortSignal) {
-  if (/\b(?:best|top|biggest|highest[- ]spending) customers?\b|\bwhich customer\b|\bcustomer (?:names?|records?|details)\b/i.test(question)) {
+  if (customerQuestion.test(question)) {
     return 'Customer information is unavailable because the orders contain no customer records.'
   }
   if (!apiKey.trim()) throw new Error(missingGeminiKey)
 
   const { GoogleGenAI: Client } = await import('@google/genai')
   const ai = new Client({ apiKey: apiKey.trim(), apiVersion: 'v1beta' })
+  const timeZone = menu.promotions.coupon.timeZone
   const input: Interactions.UserInputStep = { type: 'user_input', content: [{ type: 'text', text: question }] }
-  const draft = await askGemini(ai, [input], signal)
+  const draft = await askGemini(ai, [input], timeZone, signal)
   const steps = draft.steps ?? []
   const calls = steps.filter((step) => step.type === 'function_call')
   const [call] = calls
@@ -149,7 +169,7 @@ export async function answerSalesQuestion(question: string, menu: Menu, apiKey: 
     result: [{ type: 'text', text: JSON.stringify({ answer }) }],
   }
   // Keep Gemini's full model turn, including any thought signature, for the tool response.
-  const phrasing = await askGemini(ai, [input, ...steps, result], signal, true)
+  const phrasing = await askGemini(ai, [input, ...steps, result], timeZone, signal, true)
   const template = phrasing.output_text?.trim()
 
   return template && templates.includes(template) ? template.replace('[[RESULT]]', () => answer) : answer

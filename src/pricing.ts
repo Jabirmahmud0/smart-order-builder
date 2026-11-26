@@ -30,7 +30,9 @@ function priceLine(line: Selection, menu: Menu, promos: Promotions) {
     .filter((option) => option.groupId === promos.extras.groupId)
     .sort((a, b) => a.pricePoisha - b.pricePoisha)
   const extraUnits = extras.reduce((total, option) => total + option.qty, 0)
-  let freeUnits = Math.floor(extraUnits / promos.extras.unitsPerFree)
+  let freeUnits = promos.extras.unitsPerFree > 0
+    ? Math.floor(extraUnits / promos.extras.unitsPerFree)
+    : 0
   let extrasDiscountPoisha = 0
 
   for (const extra of extras) {
@@ -41,7 +43,8 @@ function priceLine(line: Selection, menu: Menu, promos: Promotions) {
   }
 
   const afterExtrasPoisha = unitSubtotalPoisha - extrasDiscountPoisha
-  const qualifiesForCombo = Object.entries(promos.combo.minimums).every(([groupId, minimum]) =>
+  const comboMinimums = Object.entries(promos.combo.minimums)
+  const qualifiesForCombo = comboMinimums.length > 0 && comboMinimums.every(([groupId, minimum]) =>
     selections.reduce((total, option) => total + (option.groupId === groupId ? option.qty : 0), 0) >= minimum,
   )
   const comboDiscountPoisha = qualifiesForCombo
@@ -77,7 +80,7 @@ function chooseCartDiscount(
     : 0
   let couponAmount = 0
 
-  if (couponCode === coupon.code) {
+  if (couponCode?.trim().toUpperCase() === coupon.code.toUpperCase()) {
     const localTime = new Intl.DateTimeFormat('en-GB', {
       timeZone: coupon.timeZone,
       hour: '2-digit',

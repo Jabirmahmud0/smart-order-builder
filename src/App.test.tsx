@@ -7,6 +7,7 @@ import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
 import { configB, configC } from './assessmentFixtures'
+import { cartVersionHeader } from './mocks/cartVersion'
 import { handlers } from './mocks/handlers'
 import { breakfastMenu } from './mocks/menu'
 import type { OrdersExport } from './orders'
@@ -32,6 +33,7 @@ beforeAll(() => {
 beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()))
 afterEach(() => {
   cleanup()
+  sessionStorage.clear()
   server.resetHandlers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -72,6 +74,7 @@ test('loads the menu and updates validation when quantities change', async () =>
 test('updates shared availability and lets users remove an option even when it is out of stock', async () => {
   server.use(http.get('*/api/cart', () => HttpResponse.json({
     items: [],
+    version: 0,
     stock: { ...breakfastMenu.stock, egg: 2 },
     serverTime: new Date(Date.now() + 90_000).toISOString(),
   })))
@@ -164,10 +167,10 @@ test('TC-11 shows both shortages beside the mobile Save button', async () => {
     matches: true, addEventListener: () => {}, removeEventListener: () => {},
   }))
 
-  for (const [key, options, qty] of [['B', configB, 1], ['C', configC, 2]] as const) {
+  for (const [key, options, qty, version] of [['B', configB, 1, 0], ['C', configC, 2, 1]] as const) {
     const response = await fetch('/api/cart/items', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key, [cartVersionHeader]: String(version) },
       body: JSON.stringify({ options, qty }),
     })
     expect(response.ok).toBe(true)
@@ -192,6 +195,61 @@ test('TC-11 shows both shortages beside the mobile Save button', async () => {
   fireEvent.change(quantity, { target: { value: '2' } })
   expect(bar.queryByRole('status')).toBeNull()
   expect(save.disabled).toBe(false)
+})
+
+test('keeps the edited selection when another tab changes the cart, even after a background refresh', async () => {
+  render(<App />)
+  await screen.findByText('Your cart is empty.')
+  selectBreakfast()
+  fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }))
+  await screen.findByText('1 × Build Your Breakfast')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  const quantity = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Item quantity' })
+  fireEvent.change(quantity, { target: { value: '2' } })
+
+  const { items, version } = await (await fetch('/api/cart')).json()
+  const original = items[0]
+  const changed = await fetch(`/api/cart/items/${original.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', [cartVersionHeader]: String(version) },
+    body: JSON.stringify({ options: original.options, qty: 3 }),
+  })
+  expect(changed.ok).toBe(true)
+  window.dispatchEvent(new Event('focus'))
+  await screen.findByText('3 × Build Your Breakfast')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText(/The cart changed in another tab/)
+  expect(quantity.value).toBe('2')
+  expect(screen.getByText('3 × Build Your Breakfast')).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('2 × Build Your Breakfast')
+})
+
+test('restores unfinished new and edited selections after reloading the builder', async () => {
+  const first = render(<App />)
+  await screen.findByText('Your cart is empty.')
+  selectBreakfast()
+  fireEvent.change(screen.getByRole('combobox', { name: 'Item quantity' }), { target: { value: '2' } })
+  first.unmount()
+
+  const second = render(<App />)
+  await screen.findByText('Your cart is empty.')
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Item quantity' }).value).toBe('2')
+  const add = screen.getByRole<HTMLButtonElement>('button', { name: 'Add to Cart' })
+  expect(add.disabled).toBe(false)
+  fireEvent.click(add)
+  await screen.findByText('2 × Build Your Breakfast')
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Item quantity' }), { target: { value: '3' } })
+  second.unmount()
+
+  render(<App />)
+  await screen.findByText('2 × Build Your Breakfast')
+  expect(screen.getByRole('heading', { name: 'Edit cart item' })).toBeTruthy()
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Item quantity' }).value).toBe('3')
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save changes' }).disabled).toBe(false)
 })
 
 test('uses the server countdown and keeps an expired edit draft visible with Save disabled', async () => {
@@ -345,4 +403,21 @@ test('TC-18 to TC-20 the sales assistant uses current orders and answers custome
 
   expect(requests).toHaveLength(8)
   expect(sales.queryByText(/invented customer/)).toBeNull()
+})
+
+test('does not leave an orphaned question bubble when the sales assistant request fails', async () => {
+  vi.stubEnv('VITE_GEMINI_API_KEY', '')
+
+  render(<App />)
+  await screen.findByText('Your cart is empty.')
+  fireEvent.click(screen.getByRole('button', { name: 'Sales assistant' }))
+  const sales = within(screen.getByRole('region', { name: 'Sales assistant' }))
+  const input = sales.getByRole<HTMLInputElement>('textbox', { name: 'Sales question' })
+
+  fireEvent.change(input, { target: { value: 'How many orders?' } })
+  fireEvent.click(sales.getByRole('button', { name: 'Ask' }))
+
+  await sales.findByRole('alert')
+  expect(input.value).toBe('How many orders?')
+  expect(within(sales.getByRole('log', { name: 'Sales conversation' })).queryByText('How many orders?')).toBeNull()
 })
